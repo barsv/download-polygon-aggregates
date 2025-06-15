@@ -5,15 +5,15 @@
 -- need to check that all downloaded correctly
 - for all tickers dump renames from polygon
 - check that it's possible to derive the rename from ticker_history
-- fundamentals for what date? today?
 - custom bars
 -- for top market cap?
 -- timeframe?
-- exchanges
++ exchanges
 - condition codes
 - splits
 - divs
 - short interest/volume
+- fundamentals for what date? today?
 
 2012-11-22
 2012-11-23 - is missing?
