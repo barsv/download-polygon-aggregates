@@ -48,9 +48,9 @@ def equal_md5(bucket_name, object_key, local_file_path, s3_client):
     chunk_size = 100 * 1024 * 1024
     calculated_etag = calculate_etag(local_file_path, chunk_size)
     if calculated_etag == remote_etag:
-        print("✓ File verified")
+        print("✓ Checksums match")
         return True
-    print("✗ File verification failed")
+    print("✗ Checksum verification failed")
     return False
 
 def download_file(bucket_name, object_key, local_file_path, s3_client):
