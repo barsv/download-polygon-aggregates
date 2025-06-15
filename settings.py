@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 
 # added '..' because:
@@ -10,3 +11,9 @@ PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Create absolute path to data directory
 ABSOLUTE_DATA_DIR = os.path.join(PROJECT_DIR, DATA_DIR)
+
+# Polygon has data from starting from 2003-09-10
+# proof: https://polygon.io/docs/flat-files/stocks/trades/2003/09
+START_DATE = "2003-09-10"
+
+END_DATE = datetime.now().strftime('%Y-%m-%d')  # Current date
