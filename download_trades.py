@@ -2,15 +2,21 @@ import api_key
 import boto3
 from botocore.config import Config
 import hashlib
+import logging
 import os
 import sys
 import settings
 from datetime import datetime
+import utils
+
+# Set up logging
+utils.setup_logger()
+logger = logging.getLogger(__name__)
 
 # Hardcoded date range for downloads
 START_DATE = datetime.strptime(settings.START_DATE, '%Y-%m-%d')
 END_DATE = datetime.strptime(settings.END_DATE, '%Y-%m-%d')
-print(f"Downloading files from {START_DATE.strftime('%Y-%m-%d')} to {END_DATE.strftime('%Y-%m-%d')}")
+logger.info(f"Downloading files from {START_DATE.strftime('%Y-%m-%d')} to {END_DATE.strftime('%Y-%m-%d')}")
 
 aws_access_key_id = api_key.read_api_key_id()
 aws_secret_access_key = api_key.read_api_key()
@@ -34,7 +40,7 @@ def calculate_etag(file_path, chunk_size=8 * 1024 * 1024):
 
 def equal_md5(bucket_name, object_key, local_file_path, s3_client):
     """Verify that local file and the bucket object have the same size and MD5 checksum"""
-    print(f"Verifying {local_file_path} against {bucket_name}/{object_key}")
+    logger.info(f"Verifying {local_file_path} against {bucket_name}/{object_key}")
     # Get remote file metadata
     response = s3_client.head_object(Bucket=bucket_name, Key=object_key)
     remote_etag = response['ETag'].strip('"')
@@ -42,15 +48,15 @@ def equal_md5(bucket_name, object_key, local_file_path, s3_client):
     # Check file sizes first (quick check)
     local_size = os.path.getsize(local_file_path)
     if remote_size != local_size:
-        print("✗ File sizes do not match")
+        logger.warning("✗ File sizes do not match")
         return False
-    print("✓ File sizes match")
+    logger.info("✓ File sizes match")
     chunk_size = 100 * 1024 * 1024
     calculated_etag = calculate_etag(local_file_path, chunk_size)
     if calculated_etag == remote_etag:
-        print("✓ Checksums match")
+        logger.info("✓ Checksums match")
         return True
-    print("✗ Checksum verification failed")
+    logger.warning("✗ Checksum verification failed")
     return False
 
 def download_file(bucket_name, object_key, local_file_path, s3_client):
@@ -58,12 +64,12 @@ def download_file(bucket_name, object_key, local_file_path, s3_client):
     if os.path.exists(local_file_path):
         is_valid = equal_md5(bucket_name, object_key, local_file_path, s3_client)
         if is_valid:
-            print(f"File {local_file_path} already exists and checksum matches, skipping download.")
+            logger.info(f"File {local_file_path} already exists and checksum matches, skipping download.")
             return
     # download the file
-    print(f"Downloading {object_key} to {local_file_path}")
+    logger.info(f"Downloading {object_key} to {local_file_path}")
     s3_client.download_file(bucket_name, object_key, local_file_path)
-    print("Download complete.")
+    logger.info("Download complete.")
 
 def should_download_file(filename, start_date, end_date):
     """Check if file should be downloaded based on date range"""
@@ -71,10 +77,10 @@ def should_download_file(filename, start_date, end_date):
         date_part = filename.replace('.csv.gz', '')
         file_date = datetime.strptime(date_part, '%Y-%m-%d')
         if file_date is None:
-            print(f"Warning: Could not extract date from {object_key}, skipping")
+            logger.warning(f"Warning: Could not extract date from {filename}, skipping")
             return False
     else:
-        print(f"Unexpected filename format: {filename}, expected .csv.gz, skipping")
+        logger.warning(f"Unexpected filename format: {filename}, expected .csv.gz, skipping")
         return False
     return start_date <= file_date <= end_date
 
@@ -105,6 +111,6 @@ try:
             local_file_path = os.path.join(local_file_dir, object_path_parts[-1])
             download_file(bucket_name, object_key, local_file_path, s3)
 except KeyboardInterrupt:
-    print("")
-    print("Download interrupted by user.")
+    print() # to add a newline after the keyboard interrupt C^
+    logger.info("Download interrupted by user.")
     sys.exit(0)
