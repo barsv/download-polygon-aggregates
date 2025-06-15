@@ -5,6 +5,12 @@ import hashlib
 import os
 import sys
 import settings
+from datetime import datetime
+
+# Hardcoded date range for downloads
+START_DATE = datetime.strptime(settings.START_DATE, '%Y-%m-%d')
+END_DATE = datetime.strptime(settings.END_DATE, '%Y-%m-%d')
+print(f"Downloading files from {START_DATE.strftime('%Y-%m-%d')} to {END_DATE.strftime('%Y-%m-%d')}")
 
 aws_access_key_id = api_key.read_api_key_id()
 aws_secret_access_key = api_key.read_api_key()
@@ -59,6 +65,19 @@ def download_file(bucket_name, object_key, local_file_path, s3_client):
     s3_client.download_file(bucket_name, object_key, local_file_path)
     print("Download complete.")
 
+def should_download_file(filename, start_date, end_date):
+    """Check if file should be downloaded based on date range"""
+    if filename.endswith('.csv.gz'):
+        date_part = filename.replace('.csv.gz', '')
+        file_date = datetime.strptime(date_part, '%Y-%m-%d')
+        if file_date is None:
+            print(f"Warning: Could not extract date from {object_key}, skipping")
+            return False
+    else:
+        print(f"Unexpected filename format: {filename}, expected .csv.gz, skipping")
+        return False
+    return start_date <= file_date <= end_date
+
 # Initialize a session using your credentials
 session = boto3.Session(
   aws_access_key_id,
@@ -74,11 +93,13 @@ paginator = s3.get_paginator('list_objects_v2')
 prefix = 'us_stocks_sip/trades_v1'
 bucket_name = 'flatfiles'
 try:
-    # List objects using the selected prefix
+    # List bucket objects using the selected prefix
     for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
         for obj in page['Contents']:
             object_key = obj['Key']
             object_path_parts = object_key.split('/')
+            if not should_download_file(object_path_parts[-1], START_DATE, END_DATE):
+                continue
             local_file_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'flatfiles', *object_path_parts[:-1])
             os.makedirs(local_file_dir, exist_ok=True)
             local_file_path = os.path.join(local_file_dir, object_path_parts[-1])
