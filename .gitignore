@@ -1,4 +1,5 @@
 .venv/**
+venv/**
 research/secret.txt
 research/stock_data/**
 api_key.txt
