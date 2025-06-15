@@ -1,5 +1,5 @@
-# this script just downloads ticker types to a csv file.
-# see https://polygon.io/docs/rest/stocks/tickers/ticker-types
+# this script just downloads conditions codes to a csv file.
+# see https://polygon.io/docs/rest/stocks/market-operations/condition-codes
 
 import pandas as pd
 from polygon import RESTClient

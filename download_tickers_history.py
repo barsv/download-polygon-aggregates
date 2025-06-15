@@ -1,35 +1,25 @@
+# this script downloads active and inactive tickers for all dates.
+# this is necessary to find the list of all tickers that have ever existed.
+# the code and the approach is not optimal, but ok for now.
+
 from polygon import RESTClient
 import csv
 from datetime import datetime, timedelta
 import logging
-import sys
+import settings
+import utils
+import api_key
+import os
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        # logging.FileHandler('polygon_download.log'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+START_DATE = settings.START_DATE
+END_DATE = settings.END_DATE
+
+utils.setup_logger()
 logger = logging.getLogger()
 
-# Read API key from secret.txt
-def read_api_key(file_path='secret.txt'):
-    """Read API key from secret.txt."""
-    try:
-        with open(file_path, 'r') as f:
-            api_key = f.read().strip()
-        print("Successfully read API key from secret.txt")
-        return api_key
-    except Exception as e:
-        print(f"Error reading API key from {file_path}: {e}")
-        return None
+API_KEY = api_key.read_api_key()
 
-# Polygon API client
-API_KEY = read_api_key()
-
-def download_ticker_history(start_date: str, end_date: str, output_file: str):
+def download_ticker_history(start_date: str, end_date: str, active: bool, output_file: str):
     """
     Downloads daily snapshots of tickers from Polygon's reference API
     and writes them to a CSV file.
@@ -60,7 +50,7 @@ def download_ticker_history(start_date: str, end_date: str, output_file: str):
                     tickers = client.list_tickers(
                         date=date_str,
                         market="stocks",
-                        active=False,
+                        active=active,
                         limit=1000
                     )
                     # Write each ticker to CSV
@@ -85,6 +75,10 @@ def download_ticker_history(start_date: str, end_date: str, output_file: str):
             current += timedelta(days=1)
 
 if __name__ == "__main__":
-    # polygon has data from 2003-??-??
-    download_ticker_history("2003-01-01", datetime.now().strftime("%Y-%m-%d"), "tickers_history_inactive.csv")
+    data_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'tickers')
+    logger.info("Downloading active tickers...")
+    download_ticker_history(START_DATE, END_DATE, True, os.path.join(data_dir, "tickers_history_active.csv"))
+    logger.info("Downloading inactive tickers...")
+    download_ticker_history(START_DATE, END_DATE, False, os.path.join(data_dir, "tickers_history_inactive.csv"))
+    logger.info("All done.")
 

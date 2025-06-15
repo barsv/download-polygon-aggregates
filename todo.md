@@ -2,23 +2,16 @@
 +market schedule
 +ticker types
 -get all tickers for all days
--- need to check that all downloaded correctly
-- for all tickers dump renames from polygon
-- check that it's possible to derive the rename from ticker_history
+++ need to check that all downloaded correctly
+-- derive renames from tickers_history
+-- for all tickers dump renames from polygon
+-- check that it's possible to derive renames from tickers_history
 - custom bars
 -- for top market cap?
 -- timeframe?
 + exchanges
-- condition codes
++ condition codes
 - splits
 - divs
 - short interest/volume
-- fundamentals for what date? today?
-
-2012-11-22
-2012-11-23 - is missing?
-2012-11-26
-
-2014-06-17
-???
-2014-06-11
+- fundamentals for what dates?

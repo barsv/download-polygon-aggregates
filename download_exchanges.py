@@ -1,5 +1,5 @@
-# this script just downloads ticker types to a csv file.
-# see https://polygon.io/docs/rest/stocks/tickers/ticker-types
+# this script just downloads exchanges to a csv file.
+# see https://polygon.io/docs/rest/stocks/market-operations/exchanges
 
 import pandas as pd
 from polygon import RESTClient

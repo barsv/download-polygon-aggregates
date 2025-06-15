@@ -1,3 +1,6 @@
+# this script downloads trades in flatfiles
+# for existing local files it checks if the checksum matches
+
 import api_key
 import boto3
 from botocore.config import Config
