@@ -11,7 +11,6 @@ from polygon import RESTClient
 API_KEY = api_key.read_api_key()
 client = RESTClient(API_KEY)
 
-counter = 0
 tickers_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'tickers')
 
 # read history dataframe from the 'tickers_first_last_active.csv' file
