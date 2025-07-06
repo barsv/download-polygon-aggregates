@@ -36,7 +36,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def convert_to_et(timestamp_ms):
     """Convert Unix timestamp (ms) in UTC to Eastern Time (ET) datetime string."""
-    utc_time = datetime.utcfromtimestamp(timestamp_ms / 1000).replace(tzinfo=tz.tzutc())
+    utc_time = datetime.fromtimestamp(timestamp_ms / 1000, tz=tz.tzutc())
     et_time = utc_time.astimezone(tz.gettz('America/New_York'))
     return et_time.strftime('%Y-%m-%d %H:%M:%S')
 
@@ -100,6 +100,44 @@ def save_to_csv(ticker, data, output_path):
     except Exception as e:
         logger.error(f"Error saving CSV for {ticker}: {e}")
 
+def save_to_parquet(df, filepath):
+    # Optimize data types
+    df_opt = df.copy()
+    df_opt['timestamp'] = pd.to_datetime(df_opt['timestamp']).astype('int64') // 10**9
+    df_opt['open'] = df_opt['open'].astype('float32')
+    df_opt['high'] = df_opt['high'].astype('float32')
+    df_opt['low'] = df_opt['low'].astype('float32')
+    df_opt['close'] = df_opt['close'].astype('float32')
+    df_opt['volume'] = df_opt['volume'].astype('uint32')
+    df_opt['vwap'] = df_opt['vwap'].astype('float32')
+    df_opt['transactions'] = df_opt['transactions'].astype('uint32')
+    # Save with Zstd compression
+    df_opt.to_parquet(filepath, engine='pyarrow', compression='zstd')
+
+def get_last_day_of_year(date):
+    """Get the last day of the year for a given date."""
+    return date.replace(month=12, day=31)
+
+def download_second_bars(ticker, start_date, end_date, multiplier=1, timespan='second'):
+    """Process a single ticker, fetching data in chunks."""
+    start = datetime.strptime(start_date, '%Y-%m-%d')
+    end = datetime.strptime(end_date, '%Y-%m-%d')
+    current_start = start
+    output_dir = os.path.join(OUTPUT_DIR, f'{multiplier}{timespan}', ticker)
+    os.makedirs(output_dir, exist_ok=True)
+    # Remove existing file to avoid appending to old data
+    output_path = os.path.join(output_dir, f"{ticker}.csv")
+    if os.path.exists(output_path):
+        os.remove(output_path)
+    while current_start < end:
+        last_day_of_year = get_last_day_of_year(current_start)
+        current_end = min(last_day_of_year, end)
+        file_name = f"{current_start.year}.parquet"
+        logger.info(f"Processing: {file_name}")
+        data = fetch_bars(ticker, current_start.strftime('%Y-%m-%d'), current_end.strftime('%Y-%m-%d'), multiplier, timespan)
+        save_to_parquet(pd.DataFrame(data), os.path.join(output_dir, file_name))
+        current_start = current_end + timedelta(days=1)
+
 def download_bars(ticker, start_date, end_date, multiplier=1, timespan='minute'):
     """Process a single ticker, fetching data in chunks."""
     start = datetime.strptime(start_date, '%Y-%m-%d')
@@ -118,13 +156,16 @@ def download_bars(ticker, start_date, end_date, multiplier=1, timespan='minute')
         current_start = current_end + timedelta(days=1)
 
 def main():
-    timespan = 'minute' # second, minute, hour, day, week, month, quarter, year
-    multiplier = 1 # for exmple, if timespan is 'minute', multiplier is 1 for 1 minute, 5 for 5 minutes, etc.
-    start_date = settings.START_DATE
-    end_date = settings.END_DATE
+    # timespan = 'minute' # second, minute, hour, day, week, month, quarter, year
+    # multiplier = 1 # for exmple, if timespan is 'minute', multiplier is 1 for 1 minute, 5 for 5 minutes, etc.
+    # start_date = settings.START_DATE
+    # end_date = settings.END_DATE
+    # for ticker in ['SPY']:
+    #     logger.info(f"Processing ticker: {ticker}")
+    #     download_bars(ticker, start_date, end_date, multiplier, timespan)
     for ticker in ['SPY']:
         logger.info(f"Processing ticker: {ticker}")
-        download_bars(ticker, start_date, end_date, multiplier, timespan)
+        download_second_bars(ticker, '2024-01-01', settings.END_DATE)
 
 if __name__ == '__main__':
     main()
