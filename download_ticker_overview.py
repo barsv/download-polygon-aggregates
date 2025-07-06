@@ -31,11 +31,9 @@ for i, ticker in enumerate(all_tickers):
         if i % 10 == 0:
             print(f"Processing {i+1}/{len(all_tickers)}: {ticker}")
         # Get ticker details
-        response = client.get_ticker_details(ticker)
-        # Extract the results object
-        if hasattr(response, 'results') and response.results:
-            details = response.results
-            # Convert to dictionary and exclude nested objects
+        details = client.get_ticker_details(ticker)
+        # Convert to dictionary and exclude nested objects
+        if details:
             ticker_dict = {}
             for key, value in details.__dict__.items():
                 if key not in exclude_fields:
