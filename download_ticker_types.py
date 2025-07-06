@@ -18,6 +18,8 @@ types = client.get_ticker_types(
 	)
 
 df = pd.DataFrame(types)
-output_file = os.path.join(settings.ABSOLUTE_DATA_DIR, 'tickers', "ticker_types.csv" )
+output_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'tickers')
+os.makedirs(output_dir, exist_ok=True)
+output_file = os.path.join(output_dir, "ticker_types.csv" )
 df.to_csv(output_file)
 print(f"Ticker types saved to {output_file}")
