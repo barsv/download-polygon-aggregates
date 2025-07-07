@@ -133,9 +133,12 @@ def download_second_bars(ticker, start_date, end_date, multiplier=1, timespan='s
         last_day_of_year = get_last_day_of_year(current_start)
         current_end = min(last_day_of_year, end)
         file_name = f"{current_start.year}.parquet"
-        logger.info(f"Processing: {file_name}")
-        data = fetch_bars(ticker, current_start.strftime('%Y-%m-%d'), current_end.strftime('%Y-%m-%d'), multiplier, timespan)
-        save_to_parquet(pd.DataFrame(data), os.path.join(output_dir, file_name))
+        if os.path.exists(os.path.join(output_dir, file_name)):
+            logger.info(f"File {file_name} already exists, skipping download for {ticker} from {current_start} to {current_end}")
+        else:
+            logger.info(f"Processing: {file_name}")
+            data = fetch_bars(ticker, current_start.strftime('%Y-%m-%d'), current_end.strftime('%Y-%m-%d'), multiplier, timespan)
+            save_to_parquet(pd.DataFrame(data), os.path.join(output_dir, file_name))
         current_start = current_end + timedelta(days=1)
 
 def download_bars(ticker, start_date, end_date, multiplier=1, timespan='minute'):
