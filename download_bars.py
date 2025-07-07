@@ -101,6 +101,11 @@ def save_to_csv(ticker, data, output_path):
         logger.error(f"Error saving CSV for {ticker}: {e}")
 
 def save_to_parquet(df, filepath):
+    """Save DataFrame to parquet file with optimized data types."""
+    # Check if DataFrame is empty
+    if df.empty:
+        logger.warning(f"No data to save to {filepath}")
+        return
     # Optimize data types
     df_opt = df.copy()
     df_opt['timestamp'] = pd.to_datetime(df_opt['timestamp']).astype('int64') // 10**9
