@@ -3,13 +3,14 @@
   import { createChart, CandlestickSeries } from 'lightweight-charts';
 
   let tickers = [];
-  let selectedTicker = ''
+  let selectedTicker = '';
   let chartContainer;
   let chart;
   let candlestickSeries = null;
+  let loading = false;
+  let allBars = [];
 
   onMount(async () => {
-    // Create the chart
     chart = createChart(chartContainer, {
       width: 800,
       height: 600,
@@ -33,51 +34,74 @@
       },
       timeScale: {
         borderColor: 'rgba(197, 203, 206, 0.8)',
+        timeVisible: true,
+        secondsVisible: false,
       },
     });
 
-    // Fetch the list of tickers
+    candlestickSeries = chart.addSeries(CandlestickSeries, {
+      upColor: '#26a69a',
+      downColor: '#ef5350',
+      borderDownColor: '#ef5350',
+      borderUpColor: '#26a69a',
+      wickDownColor: '#ef5350',
+      wickUpColor: '#26a69a',
+    });
+
+    chart.timeScale().subscribeVisibleLogicalRangeChange(async (newVisibleLogicalRange) => {
+      if (loading || allBars.length === 0) return;
+
+      const barsInfo = candlestickSeries.barsInLogicalRange(newVisibleLogicalRange);
+
+      // if the user scrolls to the beginning of the chart, load more data
+      if (barsInfo !== null && barsInfo.barsBefore < 50) {
+        loading = true;
+        const oldestBar = allBars[0];
+        if (oldestBar) {
+          const to = oldestBar.time - 1; // a second before the oldest bar
+          const from = to - 86400; // load 1 day before
+          await loadChartData(selectedTicker, from, to, false);
+        }
+        loading = false;
+      }
+    });
+
     const res = await fetch('/api/tickers');
     const data = await res.json();
     tickers = data.tickers;
     if (tickers.length > 0) {
-        selectedTicker = tickers[0];
-        loadChartData(selectedTicker);
+      selectedTicker = tickers[0];
+      await onTickerChange();
     }
   });
 
-  async function loadChartData(ticker) {
+  async function loadChartData(ticker, from, to, reset) {
     if (!ticker || !chart) return;
 
-    // Remove the old series if it exists
-    if (candlestickSeries) {
-      chart.removeSeries(candlestickSeries);
+    let url = `/api/bars/${ticker}`;
+    const params = new URLSearchParams();
+    if (from) params.append('from_timestamp', from);
+    if (to) params.append('to_timestamp', to);
+    if (params.toString()) {
+      url += `?${params.toString()}`;
     }
 
-    const res = await fetch(`/api/bars/${ticker}`);
+    const res = await fetch(url);
     const data = await res.json();
 
     if (data.bars && data.bars.length > 0) {
-        candlestickSeries = chart.addSeries(CandlestickSeries, {
-            upColor: '#26a69a',
-            downColor: '#ef5350',
-            borderDownColor: '#ef5350',
-            borderUpColor: '#26a69a',
-            wickDownColor: '#ef5350',
-            wickUpColor: '#26a69a',
-            priceFormat: {
-                type: 'price',
-                precision: 6,
-                minMove: 0.000001,
-            },
-        });
-        candlestickSeries.setData(data.bars);
+      if (reset) {
+        allBars = data.bars;
+      } else {
+        allBars = [...data.bars, ...allBars];
+      }
+      candlestickSeries.setData(allBars);
     }
   }
 
-  function onTickerChange(event) {
-    selectedTicker = event.target.value;
-    loadChartData(selectedTicker);
+  async function onTickerChange() {
+    allBars = [];
+    await loadChartData(selectedTicker, null, null, true);
   }
 
 </script>
