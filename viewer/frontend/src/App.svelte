@@ -74,6 +74,18 @@
       searchInput = defaultTicker; // Set the input value
       await onTickerChange();
     }
+
+    // Resize chart when container changes size
+    const resizeObserver = new ResizeObserver(entries => {
+      if (entries.length > 0) {
+        const { width, height } = entries[0].contentRect;
+        chart.resize(width, height);
+      }
+    });
+    resizeObserver.observe(chartContainer);
+
+    // Cleanup observer on component destroy
+    return () => resizeObserver.disconnect();
   });
 
   function handleFocus(event) {
@@ -146,10 +158,7 @@
 </script>
 
 <main>
-  <h1>Polygon.io Data Viewer</h1>
-
-  <div>
-    <label for="ticker-input">Choose a ticker:</label>
+  <div class="input-wrapper">
     <input
       type="text"
       id="ticker-input"
@@ -167,12 +176,28 @@
     </datalist>
   </div>
 
-  <div bind:this={chartContainer}></div>
+  <div bind:this={chartContainer} class="chart-container"></div>
 </main>
 
 <style>
   main {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
     font-family: sans-serif;
-    text-align: center;
+  }
+
+  .input-wrapper {
+    text-align: left;
+    width: 100%;
+    padding: 10px;
+    box-sizing: border-box; /* Include padding in the width */
+  }
+
+  .chart-container {
+    flex-grow: 1;
+    width: 100%;
+    height: 100%;
   }
 </style>
