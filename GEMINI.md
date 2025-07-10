@@ -73,6 +73,10 @@ AAPL  SPY
 
 The viewer is located in the `viewer/` directory and has a separate frontend and backend.
 
+## Commit Message Guidelines
+
+*   Always use one-line commit messages. They should be concise and summarize the changes effectively.
+
 *   **Backend:**
     *   **Framework:** FastAPI (Python).
     *   **Location:** `viewer/backend/main.py`.

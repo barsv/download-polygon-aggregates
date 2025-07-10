@@ -10,6 +10,8 @@
   let loading = false;
   let allBars = [];
 
+  let searchInput = '';
+
   onMount(async () => {
     chart = createChart(chartContainer, {
       width: 800,
@@ -53,27 +55,40 @@
 
       const barsInfo = candlestickSeries.barsInLogicalRange(newVisibleLogicalRange);
 
-      // if the user scrolls to the beginning of the chart, load more data
       if (barsInfo !== null && barsInfo.barsBefore < 50) {
         loading = true;
         const oldestBar = allBars[0];
         if (oldestBar) {
-          const to = oldestBar.time - 1; // a second before the oldest bar
-          const from = to - 86400; // load 1 day before
+          const to = oldestBar.time - 1;
+          const from = to - 86400;
           await loadChartData(selectedTicker, from, to, false);
         }
         loading = false;
       }
     });
 
-    const res = await fetch('/api/tickers');
-    const data = await res.json();
-    tickers = data.tickers;
+    await fetchTickers();
     if (tickers.length > 0) {
-      selectedTicker = tickers[0];
+      const defaultTicker = tickers.includes('AAPL') ? 'AAPL' : tickers[0];
+      selectedTicker = defaultTicker;
+      searchInput = defaultTicker; // Set the input value
       await onTickerChange();
     }
   });
+
+  function handleFocus(event) {
+    event.target.select();
+  }
+
+  async function fetchTickers(searchTerm = '') {
+    let url = '/api/tickers';
+    if (searchTerm) {
+      url += `?search=${searchTerm}`;
+    }
+    const res = await fetch(url);
+    const data = await res.json();
+    tickers = data.tickers || [];
+  }
 
   async function loadChartData(ticker, from, to, reset) {
     if (!ticker || !chart) return;
@@ -104,18 +119,53 @@
     await loadChartData(selectedTicker, null, null, true);
   }
 
+  let debounceTimer;
+  function handleInput(event) {
+    clearTimeout(debounceTimer);
+    const searchTerm = event.target.value;
+    selectedTicker = searchTerm.toUpperCase();
+    debounceTimer = setTimeout(() => {
+      fetchTickers(searchTerm);
+    }, 300); // 300ms debounce
+  }
+
+  function handleSelect(event) {
+    const ticker = event.target.value;
+    if (tickers.includes(ticker)) {
+        selectedTicker = ticker;
+        onTickerChange();
+    }
+  }
+
+  function handleBlur() {
+    if (searchInput !== selectedTicker) {
+      searchInput = selectedTicker;
+    }
+  }
+
 </script>
 
 <main>
   <h1>Polygon.io Data Viewer</h1>
 
   <div>
-    <label for="ticker-select">Choose a ticker:</label>
-    <select id="ticker-select" bind:value={selectedTicker} on:change={onTickerChange}>
+    <label for="ticker-input">Choose a ticker:</label>
+    <input
+      type="text"
+      id="ticker-input"
+      list="ticker-list"
+      bind:value={searchInput}
+      on:input={handleInput}
+      on:change={handleSelect}
+      on:focus={handleFocus}
+      on:blur={handleBlur}
+      placeholder="e.g. AAPL"
+    />
+    <datalist id="ticker-list">
       {#each tickers as ticker}
         <option value={ticker}>{ticker}</option>
       {/each}
-    </select>
+    </datalist>
   </div>
 
   <div bind:this={chartContainer}></div>

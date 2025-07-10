@@ -13,6 +13,7 @@ import settings
 app = FastAPI()
 
 ticker_details_df = None
+sorted_tickers = None
 
 def load_ticker_details():
     """Load ticker details from the CSV file."""
@@ -28,18 +29,26 @@ def load_ticker_details():
         return None
 
 @app.get("/api/tickers")
-async def get_tickers():
-    global ticker_details_df
+async def get_tickers(search: str = None):
+    global ticker_details_df, sorted_tickers
     if ticker_details_df is None:
         ticker_details_df = load_ticker_details()
+        if ticker_details_df is not None:
+            # Sort by market cap in descending order and cache the result
+            sorted_by_market_cap = ticker_details_df.sort_values('market_cap', ascending=False, na_position='last')
+            sorted_tickers = sorted_by_market_cap['ticker'].tolist()
 
-    if ticker_details_df is None:
-        return {"error": "Ticker details not found"}
-    
-    # Sort by market cap in descending order
-    sorted_by_market_cap = ticker_details_df.sort_values('market_cap', ascending=False, na_position='last')
-    tickers = sorted_by_market_cap['ticker'].tolist()
-    return {"tickers": tickers}
+    if sorted_tickers is None:
+        return {"error": "Ticker details not found or failed to process"}
+
+    if search:
+        # Filter tickers based on the search query (case-insensitive starts-with)
+        search_lower = search.lower()
+        filtered_tickers = [t for t in sorted_tickers if t.lower().startswith(search_lower)]
+        return {"tickers": filtered_tickers[:50]} # Return max 50 matches
+    else:
+        # Return top 100 tickers if no search query
+        return {"tickers": sorted_tickers[:100]}
 
 @app.get("/api/bars/{ticker}")
 async def get_bars(ticker: str, from_timestamp: int = None, to_timestamp: int = None):
@@ -79,19 +88,18 @@ async def get_bars(ticker: str, from_timestamp: int = None, to_timestamp: int = 
                 df = df[df['time'] <= to_timestamp]
 
             required_columns = ['time', 'open', 'high', 'low', 'close']
-            if not all(col in df.columns for col in required_columns):
-                continue
-            
-            bars_df = df[required_columns].copy()
+
+            # For initial load (no from/to timestamp), take only the last 2000 bars from the latest file.
+            # This check needs to be here, after filtering, but before extending all_bars.
+            if from_timestamp is None and to_timestamp is None and file_name == all_parquet_files[-1]:
+                df = df.tail(2000) # Take only the last 2000 rows from this DataFrame
+
+            bars_df = df[required_columns].copy() # Ensure only required columns are returned and avoid SettingWithCopyWarning.
             all_bars.extend(bars_df.to_dict(orient='records'))
 
         except Exception as e:
+            # Catch any errors during file reading or processing (e.g., missing columns, corrupted data).
+            # This ensures that a single bad file does not crash the entire API request.
             print(f"Error reading or processing {file_name}: {e}")
-
-    all_bars.sort(key=lambda x: x['time'])
-
-    # For initial load, return the most recent 2000 bars.
-    if from_timestamp is None and to_timestamp is None:
-        all_bars = all_bars[-2000:]
 
     return {"ticker": ticker, "bars": all_bars}
