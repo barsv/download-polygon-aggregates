@@ -123,23 +123,23 @@
   function handleInput(event) {
     clearTimeout(debounceTimer);
     const searchTerm = event.target.value;
-    selectedTicker = searchTerm.toUpperCase();
+    searchInput = searchTerm.toUpperCase(); // Update searchInput directly
     debounceTimer = setTimeout(() => {
       fetchTickers(searchTerm);
     }, 300); // 300ms debounce
   }
 
-  function handleSelect(event) {
-    const ticker = event.target.value;
-    if (tickers.includes(ticker)) {
-        selectedTicker = ticker;
-        onTickerChange();
-    }
-  }
-
   function handleBlur() {
     if (searchInput !== selectedTicker) {
       searchInput = selectedTicker;
+    }
+  }
+
+  // Reactive statement to handle ticker selection immediately
+  $: {
+    if (tickers.includes(searchInput) && searchInput !== selectedTicker) {
+      selectedTicker = searchInput;
+      onTickerChange();
     }
   }
 
@@ -156,7 +156,6 @@
       list="ticker-list"
       bind:value={searchInput}
       on:input={handleInput}
-      on:change={handleSelect}
       on:focus={handleFocus}
       on:blur={handleBlur}
       placeholder="e.g. AAPL"
