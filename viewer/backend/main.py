@@ -3,7 +3,9 @@ import os
 import sys
 import pandas as pd
 from fastapi import FastAPI
+from fastapi.responses import FileResponse, StreamingResponse
 from datetime import datetime
+import io
 
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -103,3 +105,35 @@ async def get_bars(ticker: str, from_timestamp: int = None, to_timestamp: int = 
             print(f"Error reading or processing {file_name}: {e}")
 
     return {"ticker": ticker, "bars": all_bars}
+
+@app.get("/api/download/files/{ticker}")
+async def get_download_files(ticker: str):
+    bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
+    if not os.path.exists(bars_dir):
+        return {"error": "Bars data not found for this ticker"}
+    
+    parquet_files = sorted([f for f in os.listdir(bars_dir) if f.endswith('.parquet')])
+    return {"files": parquet_files}
+
+@app.get("/api/download/file/{ticker}/{filename}")
+async def download_file(ticker: str, filename: str, format: str = "parquet"):
+    bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
+    file_path = os.path.join(bars_dir, filename)
+
+    if not os.path.exists(file_path):
+        return {"error": "File not found"}
+
+    if format == "parquet":
+        return FileResponse(file_path, media_type="application/octet-stream", filename=filename)
+    elif format == "csv":
+        try:
+            df = pd.read_parquet(file_path)
+            output = io.StringIO()
+            df.to_csv(output, index=False)
+            output.seek(0)
+            csv_filename = filename.replace(".parquet", ".csv")
+            return StreamingResponse(io.BytesIO(output.getvalue().encode('utf-8')), media_type="text/csv", headers={'Content-Disposition': f'attachment; filename="{csv_filename}"'})
+        except Exception as e:
+            return {"error": f"Error converting to CSV: {e}"}
+    else:
+        return {"error": "Unsupported format"}

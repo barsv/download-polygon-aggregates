@@ -44,10 +44,14 @@ h1 {
   height: 100%;
 }
 
-body {
+html, body {
+  height: 100%;
   margin: 0;
+  padding: 0; /* Ensure no default padding */
+}
+
+body {
   min-width: 320px;
-  min-height: 100vh;
 }
 
 button {

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download Files</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #0056b3;
+            margin-bottom: 20px;
+        }
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+        li {
+            background-color: #e9e9e9;
+            margin-bottom: 10px;
+            padding: 10px 15px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        a {
+            color: #007bff;
+            text-decoration: none;
+            margin-left: 10px;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 id="page-title">Download Files</h1>
+        <div id="file-list-container">
+            <p>Loading files...</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const ticker = urlParams.get('ticker');
+            const fileListContainer = document.getElementById('file-list-container');
+            const pageTitle = document.getElementById('page-title');
+
+            if (!ticker) {
+                fileListContainer.innerHTML = '<p class="error">No ticker specified.</p>';
+                return;
+            }
+
+            pageTitle.textContent = `Download Files for ${ticker}`;
+
+            try {
+                const response = await fetch(`/api/download/files/${ticker}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    fileListContainer.innerHTML = `<p class="error">Error: ${data.error}</p>`;
+                    return;
+                }
+
+                if (data.files && data.files.length > 0) {
+                    const ul = document.createElement('ul');
+                    data.files.forEach(file => {
+                        const li = document.createElement('li');
+                        li.textContent = file;
+
+                        const downloadLinks = document.createElement('div');
+                        const parquetLink = document.createElement('a');
+                        parquetLink.href = `/api/download/file/${ticker}/${file}?format=parquet`;
+                        parquetLink.textContent = 'Download Parquet';
+                        downloadLinks.appendChild(parquetLink);
+
+                        const csvLink = document.createElement('a');
+                        csvLink.href = `/api/download/file/${ticker}/${file}?format=csv`;
+                        csvLink.textContent = 'Download CSV';
+                        downloadLinks.appendChild(csvLink);
+
+                        li.appendChild(downloadLinks);
+                        ul.appendChild(li);
+                    });
+                    fileListContainer.innerHTML = '';
+                    fileListContainer.appendChild(ul);
+                } else {
+                    fileListContainer.innerHTML = '<p>No files found for this ticker.</p>';
+                }
+            } catch (error) {
+                fileListContainer.innerHTML = `<p class="error">Failed to load files: ${error.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</html>

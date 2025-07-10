@@ -79,7 +79,7 @@
     const resizeObserver = new ResizeObserver(entries => {
       if (entries.length > 0) {
         const { width, height } = entries[0].contentRect;
-        chart.resize(width, height);
+        chart.resize(width, height - 5);
       }
     });
     resizeObserver.observe(chartContainer);
@@ -147,6 +147,12 @@
     }
   }
 
+  function openDownloadPage() {
+    if (selectedTicker) {
+      window.open(`/download.html?ticker=${selectedTicker}`, '_blank');
+    }
+  }
+
   // Reactive statement to handle ticker selection immediately
   $: {
     if (tickers.includes(searchInput) && searchInput !== selectedTicker) {
@@ -174,6 +180,7 @@
         <option value={ticker}>{ticker}</option>
       {/each}
     </datalist>
+    <button on:click={openDownloadPage} class="download-button top-right-button">Download</button>
   </div>
 
   <div bind:this={chartContainer} class="chart-container"></div>
@@ -189,7 +196,9 @@
   }
 
   .input-wrapper {
-    text-align: left;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     width: 100%;
     padding: 10px;
     box-sizing: border-box; /* Include padding in the width */
@@ -198,6 +207,9 @@
   .chart-container {
     flex-grow: 1;
     width: 100%;
-    height: 100%;
+  }
+
+  .download-button {
+    /* No absolute positioning */
   }
 </style>
