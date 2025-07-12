@@ -8,7 +8,9 @@
   let chart;
   let candlestickSeries = null;
   let loading = false;
+  let error = null;
   let allBars = [];
+  let resolution = '1second';
 
   let searchInput = '';
 
@@ -104,25 +106,37 @@
 
   async function loadChartData(ticker, from, to, reset) {
     if (!ticker || !chart) return;
-
-    let url = `/api/bars/${ticker}`;
-    const params = new URLSearchParams();
-    if (from) params.append('from_timestamp', from);
-    if (to) params.append('to_timestamp', to);
-    if (params.toString()) {
-      url += `?${params.toString()}`;
-    }
-
-    const res = await fetch(url);
-    const data = await res.json();
-
-    if (data.bars && data.bars.length > 0) {
-      if (reset) {
-        allBars = data.bars;
-      } else {
-        allBars = [...data.bars, ...allBars];
+    loading = true;
+    error = null;
+    try {
+      let url = `/api/bars/${ticker}`;
+      const params = new URLSearchParams();
+      if (from) params.append('from_timestamp', from);
+      if (to) params.append('to_timestamp', to);
+      params.append('resolution', resolution);
+      if (params.toString()) {
+        url += `?${params.toString()}`;
       }
-      candlestickSeries.setData(allBars);
+
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      if (data.bars && data.bars.length > 0) {
+        if (reset) {
+          allBars = data.bars;
+        } else {
+          allBars = [...data.bars, ...allBars];
+        }
+        candlestickSeries.setData(allBars);
+      }
+    } catch (e) {
+      error = e.message;
+    } finally {
+      loading = false;
     }
   }
 
@@ -164,23 +178,36 @@
 </script>
 
 <main>
-  <div class="input-wrapper">
-    <input
-      type="text"
-      id="ticker-input"
-      list="ticker-list"
-      bind:value={searchInput}
-      on:input={handleInput}
-      on:focus={handleFocus}
-      on:blur={handleBlur}
-      placeholder="e.g. AAPL"
-    />
+  <div class="header">
+    <div class="left-controls">
+      <input
+        type="text"
+        id="ticker-input"
+        list="ticker-list"
+        bind:value={searchInput}
+        on:input={handleInput}
+        on:focus={handleFocus}
+        on:blur={handleBlur}
+        placeholder="e.g. AAPL"
+      />
+      <select bind:value={resolution} on:change={onTickerChange}>
+        <option value="1second">1 Second</option>
+        <option value="1minute">1 Minute</option>
+      </select>
+      {#if loading}
+        <div class="status-indicator">Loading...</div>
+      {:else if error}
+        <div class="status-indicator error">{error}</div>
+      {/if}
+    </div>
+    <div class="right-controls">
+      <button on:click={openDownloadPage} class="download-button">Download</button>
+    </div>
     <datalist id="ticker-list">
       {#each tickers as ticker}
         <option value={ticker}>{ticker}</option>
       {/each}
     </datalist>
-    <button on:click={openDownloadPage} class="download-button top-right-button">Download</button>
   </div>
 
   <div bind:this={chartContainer} class="chart-container"></div>
@@ -195,21 +222,34 @@
     font-family: sans-serif;
   }
 
-  .input-wrapper {
+  .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    width: 100%;
     padding: 10px;
-    box-sizing: border-box; /* Include padding in the width */
+    border-bottom: 1px solid #ccc;
+  }
+
+  .left-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .right-controls {
+    /* No specific styles needed for now */
+  }
+
+  .status-indicator {
+    font-style: italic;
+  }
+
+  .error {
+    color: red;
   }
 
   .chart-container {
     flex-grow: 1;
     width: 100%;
-  }
-
-  .download-button {
-    /* No absolute positioning */
   }
 </style>

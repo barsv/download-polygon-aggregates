@@ -15,3 +15,8 @@
 - divs
 - short interest/volume
 - fundamentals for what dates?
+
+viewer:
+- company names
+- aggregates
+- preload
