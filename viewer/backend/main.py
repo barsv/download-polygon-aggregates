@@ -44,7 +44,7 @@ def _get_minutes_df(ticker: str, timestamp: int = None, direction: str = "both")
         if not os.path.exists(file_path):
             return None
     
-    required_columns = ['open', 'high', 'low', 'close']
+    required_columns = ['timestamp', 'open', 'high', 'low', 'close']
     
     # Use PyArrow for faster reading
     table = pq.read_table(file_path, columns=required_columns)
