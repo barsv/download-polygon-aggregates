@@ -162,6 +162,39 @@
     
     // Load data around the center timestamp, or latest if no center found
     await loadChartData(selectedTicker, centerTimestamp, "both");
+    
+    // After loading data, center the chart on the timestamp if we have it
+    if (centerTimestamp && allBars.length > 0) {
+      try {
+        // Find the position of centerTimestamp in allBars
+        let centerIndex = -1;
+        for (let i = 0; i < allBars.length; i++) {
+          if (allBars[i].time >= centerTimestamp) {
+            centerIndex = i;
+            break;
+          }
+        }
+        
+        // If exact timestamp not found, use the closest one
+        if (centerIndex === -1) {
+          centerIndex = allBars.length - 1;
+        }
+        
+        // Calculate window: ±500 bars from center
+        const startIndex = Math.max(0, centerIndex - 500);
+        const endIndex = Math.min(allBars.length - 1, centerIndex + 500);
+        
+        const fromTime = allBars[startIndex].time;
+        const toTime = allBars[endIndex].time;
+        
+        chart.timeScale().setVisibleRange({
+          from: fromTime,
+          to: toTime
+        });
+      } catch (e) {
+        console.warn('Could not set visible range:', e);
+      }
+    }
   }
 
   let debounceTimer;
