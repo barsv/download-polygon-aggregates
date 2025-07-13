@@ -15,7 +15,7 @@ This is a financial data pipeline that downloads, processes, and visualizes OHLC
 - **Raw Data**: 1-second bars stored as yearly parquet files per ticker: `bars/1second/{ticker}/{year}.parquet`
 - **Aggregated Data**: 1-minute bars created by `aggregate_bars.py`: `bars/1minute/{ticker}.parquet`
 - **Index Strategy**: Minute bars use timestamp as index; second bars use timestamp as column
-- **Critical Detail**: Always use PyArrow (`pyarrow.parquet`) for performance - pandas fallbacks removed
+- **Critical Detail**: The project uses PyArrow (`pyarrow.parquet`) for performance - pandas fallbacks were removed
 
 ### 3. Web Viewer (`viewer/`)
 - **Backend**: FastAPI server (`backend/main.py`) serving OHLC data APIs
@@ -90,8 +90,8 @@ aggregate_bars('AAPL')
 
 ### Performance Debugging
 - **LIMIT = 3000**: Controls bars per API response (configured in backend/main.py)
-- **Memory Pattern**: Process data year-by-year to manage large datasets
-- **Column Filtering**: Always specify required columns in parquet reads
+- **Memory Pattern**: The project processes data year-by-year to manage large datasets
+- **Column Filtering**: The codebase typically specifies required columns in parquet reads
 
 ## Integration Points
 
@@ -109,13 +109,13 @@ aggregate_bars('AAPL')
 
 1. **Symmetric Architecture**: Both `_get_minutes_df()` and `_get_seconds_df()` return identical column structure
 2. **No Debug Logging**: Production code should not include timing/performance logs
-3. **Timestamp Handling**: Always ensure ascending order for frontend compatibility
-4. **Path Resolution**: Use `sys.path.append()` for importing project modules from subdirectories
+3. **Timestamp Handling**: The frontend expects data in ascending order for compatibility
+4. **Path Resolution**: Project modules are imported using `sys.path.append()` from subdirectories
 5. **Error Boundaries**: Data loading functions return `None` for missing data, not exceptions
 
 ## Common Tasks
 
 ### Performance Optimization
-- Used PyArrow column selection: `pq.read_table(file, columns=['required', 'columns'])`
+- The project used PyArrow column selection: `pq.read_table(file, columns=['required', 'columns'])`
 - Prefered `searchsorted()` over boolean indexing for timestamp filtering
 - Processed data in chunks (yearly files) for memory efficiency
