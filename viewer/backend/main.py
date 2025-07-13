@@ -35,7 +35,7 @@ def load_ticker_details():
         print(f"Error reading ticker details file: {e}")
         return None
 
-def _get_minutes_df(ticker: str, to_timestamp: int = None, from_timestamp: int = None) -> pd.DataFrame:
+def _get_minutes_df(ticker: str, timestamp: int = None, direction: str = "both") -> pd.DataFrame:
     """Load minute bars with pre-filtering using PyArrow."""
     bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1minute')
     file_path = os.path.join(bars_dir, f"{ticker}.parquet")
@@ -50,15 +50,21 @@ def _get_minutes_df(ticker: str, to_timestamp: int = None, from_timestamp: int =
     table = pq.read_table(file_path, columns=required_columns)
     df = table.to_pandas()
     
-    # Pre-filter based on timestamps
-    if to_timestamp is not None:
-        pos = df.index.get_loc(to_timestamp)
-        start_pos = max(0, pos - LIMIT + 1)  # Include LIMIT records before (but not including) to_timestamp
-        df = df.iloc[start_pos:pos]  # Include to_timestamp itself
-    elif from_timestamp is not None:
-        pos = df.index.get_loc(from_timestamp)
-        end_pos = min(len(df), pos + LIMIT)
-        df = df.iloc[pos:end_pos]  # Include from_timestamp and LIMIT records after
+    # Pre-filter based on timestamps and direction
+    if timestamp is not None:
+        if direction == "backward":
+            pos = df.index.get_loc(timestamp)
+            start_pos = max(0, pos - LIMIT + 1)
+            df = df.iloc[start_pos:pos]
+        elif direction == "forward":
+            pos = df.index.get_loc(timestamp)
+            end_pos = min(len(df), pos + LIMIT)
+            df = df.iloc[pos:end_pos]
+        elif direction == "both":
+            pos = df.index.get_loc(timestamp)
+            start_pos = max(0, pos - LIMIT // 2)
+            end_pos = min(len(df), pos + LIMIT // 2)
+            df = df.iloc[start_pos:end_pos]
     else:
         df = df.tail(LIMIT)
     
@@ -68,7 +74,7 @@ def _get_minutes_df(ticker: str, to_timestamp: int = None, from_timestamp: int =
         
     return df
 
-def _get_seconds_df(ticker: str, from_timestamp: int = None, to_timestamp: int = None) -> pd.DataFrame:
+def _get_seconds_df(ticker: str, timestamp: int = None, direction: str = "both") -> pd.DataFrame:
     """Fetches and concatenates DataFrame for 1-second bars with filtering."""
     bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
     if not os.path.exists(bars_dir):
@@ -77,13 +83,19 @@ def _get_seconds_df(ticker: str, from_timestamp: int = None, to_timestamp: int =
     all_parquet_files = sorted([f for f in os.listdir(bars_dir) if f.endswith('.parquet')])
     files_to_read = []
 
-    if from_timestamp and to_timestamp:
-        from_year = datetime.fromtimestamp(from_timestamp).year
-        to_year = datetime.fromtimestamp(to_timestamp).year
-        for year in range(from_year, to_year + 1):
-            file_name = f"{year}.parquet"
-            if file_name in all_parquet_files:
-                files_to_read.append(os.path.join(bars_dir, file_name))
+    if timestamp:
+        target_year = datetime.fromtimestamp(timestamp).year
+        file_name = f"{target_year}.parquet"
+        if file_name in all_parquet_files:
+            files_to_read.append(os.path.join(bars_dir, file_name))
+        # If direction is 'both' and data spans across year boundaries, consider adjacent years
+        if direction == "both":
+            prev_year_file = f"{target_year - 1}.parquet"
+            if prev_year_file in all_parquet_files and os.path.join(bars_dir, prev_year_file) not in files_to_read:
+                files_to_read.insert(0, os.path.join(bars_dir, prev_year_file))
+            next_year_file = f"{target_year + 1}.parquet"
+            if next_year_file in all_parquet_files and os.path.join(bars_dir, next_year_file) not in files_to_read:
+                files_to_read.append(os.path.join(bars_dir, next_year_file))
     elif all_parquet_files:
         files_to_read.append(os.path.join(bars_dir, all_parquet_files[-1]))
 
@@ -93,16 +105,22 @@ def _get_seconds_df(ticker: str, from_timestamp: int = None, to_timestamp: int =
     required_columns = ['timestamp', 'open', 'high', 'low', 'close']
     df = pd.concat([pd.read_parquet(f, columns=required_columns) for f in files_to_read], ignore_index=True)
     
-    # Apply filtering
-    if to_timestamp is not None:
-        idx = df['timestamp'].searchsorted(to_timestamp, side='right')
-        start_idx = max(0, idx - LIMIT)
-        df = df.iloc[start_idx:idx - 1].copy()
-    elif from_timestamp is not None:
-        idx = df['timestamp'].searchsorted(from_timestamp, side='left')
-        df = df.iloc[idx:idx + LIMIT].copy()
+    # Apply filtering based on timestamp and direction
+    if timestamp is not None:
+        if direction == "backward":
+            idx = df['timestamp'].searchsorted(timestamp, side='right')
+            start_idx = max(0, idx - LIMIT)
+            df = df.iloc[start_idx:idx - 1]
+        elif direction == "forward":
+            idx = df['timestamp'].searchsorted(timestamp, side='left')
+            df = df.iloc[idx:idx + LIMIT]
+        elif direction == "both":
+            idx = df['timestamp'].searchsorted(timestamp, side='left')
+            start_idx = max(0, idx - LIMIT // 2)
+            end_idx = min(len(df), idx + LIMIT // 2)
+            df = df.iloc[start_idx:end_idx]
     else:
-        df = df.tail(LIMIT).copy()
+        df = df.tail(LIMIT)
     
     # Rename timestamp column to time
     df.rename(columns={'timestamp': 'time'}, inplace=True)
@@ -129,11 +147,11 @@ async def get_tickers(search: str = None):
         return {"tickers": sorted_tickers[:100]}
 
 @app.get("/api/bars/{ticker}")
-async def get_bars(ticker: str, from_timestamp: int = None, to_timestamp: int = None, resolution: str = "1second"):
+async def get_bars(ticker: str, timestamp: int = None, direction = "", resolution: str = "1second"):
     if resolution == "1minute":
-        df = _get_minutes_df(ticker, to_timestamp, from_timestamp)
+        df = _get_minutes_df(ticker, timestamp, direction)
     elif resolution == "1second":
-        df = _get_seconds_df(ticker, from_timestamp, to_timestamp)
+        df = _get_seconds_df(ticker, timestamp, direction)
     else:
         return {"error": f"Unsupported resolution: {resolution}"}
         

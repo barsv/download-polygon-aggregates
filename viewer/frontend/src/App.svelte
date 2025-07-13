@@ -62,8 +62,8 @@
         const oldestBar = allBars[0];
         if (oldestBar) {
           // Передаем точный timestamp самого старого бара для оптимизации
-          const toTimestamp = oldestBar.time;
-          await loadChartData(selectedTicker, toTimestamp, false);
+          const timestamp = oldestBar.time;
+          await loadChartData(selectedTicker, timestamp, "backward");
         }
         loading = false;
       }
@@ -74,7 +74,7 @@
       const defaultTicker = tickers.includes('AAPL') ? 'AAPL' : tickers[0];
       selectedTicker = defaultTicker;
       searchInput = defaultTicker; // Set the input value
-      await onTickerChange();
+      await onTickerChange(true); // Initial load, direction 'both'
     }
 
     // Resize chart when container changes size
@@ -104,16 +104,17 @@
     tickers = data.tickers || [];
   }
 
-  async function loadChartData(ticker, toTimestamp = null, reset = true) {
+  async function loadChartData(ticker, timestamp = null, direction = "backward") {
     if (!ticker || !chart) return;
     loading = true;
     error = null;
     try {
       let url = `/api/bars/${ticker}`;
       const params = new URLSearchParams();
-      if (toTimestamp) {
-        params.append('to_timestamp', toTimestamp);
+      if (timestamp) {
+        params.append('timestamp', timestamp);
       }
+      params.append('direction', direction); // Add direction parameter
       params.append('resolution', resolution);
       if (params.toString()) {
         url += `?${params.toString()}`;
@@ -127,11 +128,13 @@
       }
 
       if (data.bars && data.bars.length > 0) {
-        if (reset) {
-          allBars = data.bars;
-        } else {
-          // For historical data loading, prepend to the beginning
+        if (direction === "backward") {
           allBars = [...data.bars, ...allBars];
+        } else if (direction === "forward") {
+          allBars = [...allBars, ...data.bars];
+        } else if (direction === "both") {
+          // For "both" or initial load, replace allBars
+          allBars = data.bars;
         }
         candlestickSeries.setData(allBars);
       }
@@ -142,9 +145,13 @@
     }
   }
 
-  async function onTickerChange() {
+  async function onTickerChange(initialLoad = false) {
     allBars = [];
-    await loadChartData(selectedTicker, null, true);
+    if (initialLoad) {
+      await loadChartData(selectedTicker, null, "both");
+    } else {
+      await loadChartData(selectedTicker, null, "backward");
+    }
   }
 
   let debounceTimer;
