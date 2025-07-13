@@ -74,7 +74,7 @@
       const defaultTicker = tickers.includes('AAPL') ? 'AAPL' : tickers[0];
       selectedTicker = defaultTicker;
       searchInput = defaultTicker; // Set the input value
-      await onTickerChange(true); // Initial load, direction 'both'
+      await onTickerChange();
     }
 
     // Resize chart when container changes size
@@ -145,13 +145,23 @@
     }
   }
 
-  async function onTickerChange(initialLoad = false) {
-    allBars = [];
-    if (initialLoad) {
-      await loadChartData(selectedTicker, null, "both");
-    } else {
-      await loadChartData(selectedTicker, null, "backward");
+  async function onTickerChange() {
+    // Try to get current visible time range before clearing data
+    let centerTimestamp = null;
+    try {
+      const visibleLogicalRange = chart.timeScale().getVisibleRange();
+      if (visibleLogicalRange) {
+        centerTimestamp = Math.floor(visibleLogicalRange.from + (visibleLogicalRange.to - visibleLogicalRange.from) / 2);
+      }
+    } catch (e) {
+      // If we can't get visible range, fallback to null (load latest data)
+      console.warn('Could not get visible range:', e);
     }
+    
+    allBars = [];
+    
+    // Load data around the center timestamp, or latest if no center found
+    await loadChartData(selectedTicker, centerTimestamp, "both");
   }
 
   let debounceTimer;

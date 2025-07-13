@@ -52,16 +52,20 @@ def _get_minutes_df(ticker: str, timestamp: int = None, direction: str = "both")
     
     # Pre-filter based on timestamps and direction
     if timestamp is not None:
-        if direction == "backward":
+        try:
             pos = df.index.get_loc(timestamp)
+        except KeyError:
+            # Fallback: find position using searchsorted (consistent with _get_seconds_df)
+            pos = df.index.searchsorted(timestamp)
+            pos = min(pos, len(df) - 1)  # Ensure pos is within bounds
+        
+        if direction == "backward":
             start_pos = max(0, pos - LIMIT + 1)
             df = df.iloc[start_pos:pos]
         elif direction == "forward":
-            pos = df.index.get_loc(timestamp)
             end_pos = min(len(df), pos + LIMIT)
             df = df.iloc[pos:end_pos]
         elif direction == "both":
-            pos = df.index.get_loc(timestamp)
             start_pos = max(0, pos - LIMIT // 2)
             end_pos = min(len(df), pos + LIMIT // 2)
             df = df.iloc[start_pos:end_pos]
