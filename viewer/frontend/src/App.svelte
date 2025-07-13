@@ -61,9 +61,9 @@
         loading = true;
         const oldestBar = allBars[0];
         if (oldestBar) {
-          const to = oldestBar.time - 1;
-          const from = to - 86400;
-          await loadChartData(selectedTicker, from, to, false);
+          // Передаем точный timestamp самого старого бара для оптимизации
+          const toTimestamp = oldestBar.time;
+          await loadChartData(selectedTicker, toTimestamp, false);
         }
         loading = false;
       }
@@ -104,15 +104,16 @@
     tickers = data.tickers || [];
   }
 
-  async function loadChartData(ticker, from, to, reset) {
+  async function loadChartData(ticker, toTimestamp = null, reset = true) {
     if (!ticker || !chart) return;
     loading = true;
     error = null;
     try {
       let url = `/api/bars/${ticker}`;
       const params = new URLSearchParams();
-      if (from) params.append('from_timestamp', from);
-      if (to) params.append('to_timestamp', to);
+      if (toTimestamp) {
+        params.append('to_timestamp', toTimestamp);
+      }
       params.append('resolution', resolution);
       if (params.toString()) {
         url += `?${params.toString()}`;
@@ -129,6 +130,7 @@
         if (reset) {
           allBars = data.bars;
         } else {
+          // For historical data loading, prepend to the beginning
           allBars = [...data.bars, ...allBars];
         }
         candlestickSeries.setData(allBars);
@@ -142,7 +144,7 @@
 
   async function onTickerChange() {
     allBars = [];
-    await loadChartData(selectedTicker, null, null, true);
+    await loadChartData(selectedTicker, null, true);
   }
 
   let debounceTimer;

@@ -75,11 +75,11 @@ def aggregate_bars(ticker):
     final_agg_df = pd.concat(aggregated_dfs, ignore_index=False) # Keep index for proper sorting
     final_agg_df.sort_index(inplace=True) # Ensure chronological order
 
-    # Convert timestamp back to seconds
-    final_agg_df.reset_index(inplace=True)
-    final_agg_df['timestamp'] = (final_agg_df['timestamp'].astype(int) // 10**9)
+    # Convert timestamp back to seconds but keep it as index
+    final_agg_df.index = (final_agg_df.index.astype(int) // 10**9)
 
-    final_agg_df.to_parquet(output_file, index=False)
+    # Save with timestamp as index for faster lookups
+    final_agg_df.to_parquet(output_file, index=True)
     print(f"Successfully created {output_file}")
     
     # print file size

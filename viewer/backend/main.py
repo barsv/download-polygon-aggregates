@@ -5,11 +5,11 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, StreamingResponse
 from datetime import datetime
 import io
+import pyarrow.parquet as pq
+import pyarrow as pa
 
-# Debug: Print startup information
-print(f"DEBUG: Starting main.py from {__file__}")
-print(f"DEBUG: Current working directory: {os.getcwd()}")
-print(f"DEBUG: Python path: {sys.path[:3]}...")  # Show first 3 entries
+# Configuration
+LIMIT = 3000
 
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -35,18 +35,41 @@ def load_ticker_details():
         print(f"Error reading ticker details file: {e}")
         return None
 
-def _get_minutes_df(ticker: str) -> pd.DataFrame:
-    """Fetches or generates the DataFrame for 1-minute bars."""
+def _get_minutes_df(ticker: str, to_timestamp: int = None, from_timestamp: int = None) -> pd.DataFrame:
+    """Load minute bars with pre-filtering using PyArrow."""
     bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1minute')
     file_path = os.path.join(bars_dir, f"{ticker}.parquet")
     if not os.path.exists(file_path):
         aggregate_bars(ticker)
         if not os.path.exists(file_path):
             return None
-    return pd.read_parquet(file_path)
+    
+    required_columns = ['open', 'high', 'low', 'close']
+    
+    # Use PyArrow for faster reading
+    table = pq.read_table(file_path, columns=required_columns)
+    df = table.to_pandas()
+    
+    # Pre-filter based on timestamps
+    if to_timestamp is not None:
+        pos = df.index.get_loc(to_timestamp)
+        start_pos = max(0, pos - LIMIT + 1)  # Include LIMIT records before (but not including) to_timestamp
+        df = df.iloc[start_pos:pos]  # Include to_timestamp itself
+    elif from_timestamp is not None:
+        pos = df.index.get_loc(from_timestamp)
+        end_pos = min(len(df), pos + LIMIT)
+        df = df.iloc[pos:end_pos]  # Include from_timestamp and LIMIT records after
+    else:
+        df = df.tail(LIMIT)
+    
+    # Reset index to get timestamp as column
+    df.reset_index(inplace=True)
+    df.rename(columns={df.columns[0]: 'time'}, inplace=True)
+        
+    return df
 
 def _get_seconds_df(ticker: str, from_timestamp: int = None, to_timestamp: int = None) -> pd.DataFrame:
-    """Fetches and concatenates DataFrame for 1-second bars."""
+    """Fetches and concatenates DataFrame for 1-second bars with filtering."""
     bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
     if not os.path.exists(bars_dir):
         return None
@@ -67,7 +90,24 @@ def _get_seconds_df(ticker: str, from_timestamp: int = None, to_timestamp: int =
     if not files_to_read:
         return None
 
-    return pd.concat([pd.read_parquet(f) for f in files_to_read], ignore_index=True)
+    required_columns = ['timestamp', 'open', 'high', 'low', 'close']
+    df = pd.concat([pd.read_parquet(f, columns=required_columns) for f in files_to_read], ignore_index=True)
+    
+    # Apply filtering
+    if to_timestamp is not None:
+        idx = df['timestamp'].searchsorted(to_timestamp, side='right')
+        start_idx = max(0, idx - LIMIT)
+        df = df.iloc[start_idx:idx - 1].copy()
+    elif from_timestamp is not None:
+        idx = df['timestamp'].searchsorted(from_timestamp, side='left')
+        df = df.iloc[idx:idx + LIMIT].copy()
+    else:
+        df = df.tail(LIMIT).copy()
+    
+    # Rename timestamp column to time
+    df.rename(columns={'timestamp': 'time'}, inplace=True)
+    
+    return df
 
 @app.get("/api/tickers")
 async def get_tickers(search: str = None):
@@ -90,32 +130,20 @@ async def get_tickers(search: str = None):
 
 @app.get("/api/bars/{ticker}")
 async def get_bars(ticker: str, from_timestamp: int = None, to_timestamp: int = None, resolution: str = "1second"):
-    df = None
     if resolution == "1minute":
-        df = _get_minutes_df(ticker)
+        df = _get_minutes_df(ticker, to_timestamp, from_timestamp)
     elif resolution == "1second":
         df = _get_seconds_df(ticker, from_timestamp, to_timestamp)
-
+    else:
+        return {"error": f"Unsupported resolution: {resolution}"}
+        
     if df is None or df.empty:
         return {"error": f"No data found for {ticker} with resolution {resolution}"}
 
-    df.rename(columns={'timestamp': 'time'}, inplace=True)
-
-    if from_timestamp and to_timestamp:
-        df = df[(df['time'] >= from_timestamp) & (df['time'] <= to_timestamp)]
-    elif from_timestamp:
-        df = df[df['time'] >= from_timestamp]
-    elif to_timestamp:
-        df = df[df['time'] <= to_timestamp]
-
-    is_initial_load = from_timestamp is None and to_timestamp is None
-    if is_initial_load:
-        df = df.tail(2000)
-
-    required_columns = ['time', 'open', 'high', 'low', 'close']
-    bars_df = df[required_columns].copy()
+    # Both functions now return only the required columns
+    result = {"ticker": ticker, "bars": df.to_dict(orient='records')}
     
-    return {"ticker": ticker, "bars": bars_df.to_dict(orient='records')}
+    return result
 
 @app.get("/api/download/files/{ticker}")
 async def get_download_files(ticker: str):
