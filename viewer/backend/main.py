@@ -98,8 +98,8 @@ def _get_aggregated_minutes_df(ticker: str, minutes: int, timestamp: int = None,
         
     return df_result
 
-def _get_seconds_df(ticker: str, timestamp: int = None, direction: str = "both") -> pd.DataFrame:
-    """Fetches and concatenates DataFrame for 1-second bars with filtering."""
+def _get_aggregated_seconds_df(ticker: str, seconds: int, timestamp: int = None, direction: str = "both") -> pd.DataFrame:
+    """Load second bars and aggregate to specified second interval on-the-fly."""
     bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
     if not os.path.exists(bars_dir):
         return None
@@ -129,27 +129,49 @@ def _get_seconds_df(ticker: str, timestamp: int = None, direction: str = "both")
     required_columns = ['timestamp', 'open', 'high', 'low', 'close']
     df = pd.concat([pd.read_parquet(f, columns=required_columns) for f in files_to_read], ignore_index=True)
     
-    # Apply filtering based on timestamp and direction
+    # Pre-filter second data to reduce processing
+    second_limit = LIMIT * seconds
     if timestamp is not None:
         if direction == "backward":
             idx = df['timestamp'].searchsorted(timestamp, side='right')
-            start_idx = max(0, idx - LIMIT)
+            start_idx = max(0, idx - second_limit)
             df = df.iloc[start_idx:idx - 1]
         elif direction == "forward":
             idx = df['timestamp'].searchsorted(timestamp, side='left')
-            df = df.iloc[idx:idx + LIMIT]
+            df = df.iloc[idx:idx + second_limit]
         elif direction == "both":
             idx = df['timestamp'].searchsorted(timestamp, side='left')
-            start_idx = max(0, idx - LIMIT // 2)
-            end_idx = min(len(df), idx + LIMIT // 2)
+            start_idx = max(0, idx - second_limit // 2)
+            end_idx = min(len(df), idx + second_limit // 2)
             df = df.iloc[start_idx:end_idx]
     else:
-        df = df.tail(LIMIT)
+        df = df.tail(second_limit)
+    
+    # If seconds == 1, skip resampling (already 1-second data)
+    if seconds == 1:
+        df_result = df
+    else:
+        # Convert timestamp to datetime for resampling
+        df['timestamp_dt'] = pd.to_datetime(df['timestamp'], unit='s')
+        df.set_index('timestamp_dt', inplace=True)
+        
+        # Resample to specified second interval
+        resample_rule = f'{seconds}S'
+        df_result = df.resample(resample_rule).agg({
+            'open': 'first',
+            'high': 'max',
+            'low': 'min',
+            'close': 'last'
+        }).dropna()
+        
+        # Convert back to timestamp
+        df_result['timestamp'] = (df_result.index.astype(int) // 10**9)
+        df_result.reset_index(drop=True, inplace=True)
     
     # Rename timestamp column to time
-    df.rename(columns={'timestamp': 'time'}, inplace=True)
+    df_result.rename(columns={'timestamp': 'time'}, inplace=True)
     
-    return df
+    return df_result
 
 @app.get("/api/tickers")
 async def get_tickers(search: str = None):
@@ -180,8 +202,8 @@ async def get_bars(ticker: str, timestamp: int = None, direction = "", period: s
         multiplier: integer multiplier (e.g., 5 for 5-minute bars)
     """
     
-    if period == "second" and multiplier == 1:
-        df = _get_seconds_df(ticker, timestamp, direction)
+    if period == "second":
+        df = _get_aggregated_seconds_df(ticker, multiplier, timestamp, direction)
     elif period in ["minute", "hour", "day", "week"]:
         # Convert period to minutes
         period_to_minutes = {

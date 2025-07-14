@@ -119,6 +119,10 @@
       // Map resolution to period and multiplier for backend
       const resolutionMap = {
         '1second': { period: 'second', multiplier: 1 },
+        '5second': { period: 'second', multiplier: 5 },
+        '10second': { period: 'second', multiplier: 10 },
+        '15second': { period: 'second', multiplier: 15 },
+        '30second': { period: 'second', multiplier: 30 },
         '1minute': { period: 'minute', multiplier: 1 },
         '5minute': { period: 'minute', multiplier: 5 },
         '15minute': { period: 'minute', multiplier: 15 },
@@ -262,6 +266,10 @@
       />
       <select bind:value={resolution} on:change={onTickerChange}>
         <option value="1second">1 Second</option>
+        <option value="5second">5 Seconds</option>
+        <option value="10second">10 Seconds</option>
+        <option value="15second">15 Seconds</option>
+        <option value="30second">30 Seconds</option>
         <option value="1minute">1 Minute</option>
         <option value="5minute">5 Minutes</option>
         <option value="15minute">15 Minutes</option>
