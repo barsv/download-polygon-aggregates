@@ -112,10 +112,26 @@ aggregate_bars('AAPL')
 3. **Timestamp Handling**: The frontend expects data in ascending order for compatibility
 4. **Path Resolution**: Project modules are imported using `sys.path.append()` from subdirectories
 5. **Error Boundaries**: Data loading functions return `None` for missing data, not exceptions
+6. **CSS Styling**: Use CSS classes in `<style>` blocks, avoid inline styles except when containing variables or logic that cannot be extracted
 
-## Common Tasks
+## Frontend Development Standards
 
-### Performance Optimization
-- The project used PyArrow column selection: `pq.read_table(file, columns=['required', 'columns'])`
-- Prefered `searchsorted()` over boolean indexing for timestamp filtering
-- Processed data in chunks (yearly files) for memory efficiency
+### Svelte Component Styling
+```svelte
+<!-- GOOD: Use CSS classes -->
+<input class="multiplier-input" type="number" bind:value={multiplier} />
+
+<style>
+  .multiplier-input {
+    width: 60px;
+  }
+</style>
+
+<!-- BAD: Avoid inline styles -->
+<input style="width: 60px;" type="number" bind:value={multiplier} />
+```
+
+### When Inline Styles Are Acceptable
+- Dynamic values that change based on component state
+- Calculated positions or dimensions
+- Color values from variables that cannot be easily extracted to CSS
