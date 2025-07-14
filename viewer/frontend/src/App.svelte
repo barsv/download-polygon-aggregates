@@ -114,8 +114,26 @@
       if (timestamp) {
         params.append('timestamp', timestamp);
       }
-      params.append('direction', direction); // Add direction parameter
-      params.append('resolution', resolution);
+      params.append('direction', direction);
+      
+      // Map resolution to period and multiplier for backend
+      const resolutionMap = {
+        '1second': { period: 'second', multiplier: 1 },
+        '1minute': { period: 'minute', multiplier: 1 },
+        '5minute': { period: 'minute', multiplier: 5 },
+        '15minute': { period: 'minute', multiplier: 15 },
+        '30minute': { period: 'minute', multiplier: 30 },
+        '60minute': { period: 'hour', multiplier: 1 },
+        '240minute': { period: 'hour', multiplier: 4 },
+        '720minute': { period: 'hour', multiplier: 12 },
+        '1440minute': { period: 'day', multiplier: 1 },
+        '10080minute': { period: 'week', multiplier: 1 }
+      };
+      
+      const config = resolutionMap[resolution] || { period: 'second', multiplier: 1 };
+      params.append('period', config.period);
+      params.append('multiplier', config.multiplier.toString());
+      
       if (params.toString()) {
         url += `?${params.toString()}`;
       }
@@ -245,6 +263,14 @@
       <select bind:value={resolution} on:change={onTickerChange}>
         <option value="1second">1 Second</option>
         <option value="1minute">1 Minute</option>
+        <option value="5minute">5 Minutes</option>
+        <option value="15minute">15 Minutes</option>
+        <option value="30minute">30 Minutes</option>
+        <option value="60minute">1 Hour</option>
+        <option value="240minute">4 Hours</option>
+        <option value="720minute">12 Hours</option>
+        <option value="1440minute">1 Day</option>
+        <option value="10080minute">1 Week</option>
       </select>
       {#if loading}
         <div class="status-indicator">Loading...</div>
@@ -286,10 +312,6 @@
     display: flex;
     align-items: center;
     gap: 10px;
-  }
-
-  .right-controls {
-    /* No specific styles needed for now */
   }
 
   .status-indicator {

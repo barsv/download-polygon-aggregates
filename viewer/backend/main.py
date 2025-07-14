@@ -35,8 +35,8 @@ def load_ticker_details():
         print(f"Error reading ticker details file: {e}")
         return None
 
-def _get_minutes_df(ticker: str, timestamp: int = None, direction: str = "both") -> pd.DataFrame:
-    """Load minute bars with pre-filtering using PyArrow."""
+def _get_aggregated_minutes_df(ticker: str, minutes: int, timestamp: int = None, direction: str = "both") -> pd.DataFrame:
+    """Load minute bars and aggregate to specified minute interval on-the-fly."""
     bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1minute')
     file_path = os.path.join(bars_dir, f"{ticker}.parquet")
     if not os.path.exists(file_path):
@@ -50,33 +50,53 @@ def _get_minutes_df(ticker: str, timestamp: int = None, direction: str = "both")
     table = pq.read_table(file_path, columns=required_columns)
     df = table.to_pandas()
     
-    # Pre-filter based on timestamps and direction
+    # Pre-filter minute data to reduce processing
+    minute_limit = LIMIT * minutes
     if timestamp is not None:
         try:
             pos = df.index.get_loc(timestamp)
         except KeyError:
-            # Fallback: find position using searchsorted (consistent with _get_seconds_df)
+            # Fallback: find position using searchsorted
             pos = df.index.searchsorted(timestamp)
-            pos = min(pos, len(df) - 1)  # Ensure pos is within bounds
+            pos = min(pos, len(df) - 1)
         
         if direction == "backward":
-            start_pos = max(0, pos - LIMIT + 1)
+            start_pos = max(0, pos - minute_limit + 1)
             df = df.iloc[start_pos:pos]
         elif direction == "forward":
-            end_pos = min(len(df), pos + LIMIT)
+            end_pos = min(len(df), pos + minute_limit)
             df = df.iloc[pos:end_pos]
         elif direction == "both":
-            start_pos = max(0, pos - LIMIT // 2)
-            end_pos = min(len(df), pos + LIMIT // 2)
+            start_pos = max(0, pos - minute_limit // 2)
+            end_pos = min(len(df), pos + minute_limit // 2)
             df = df.iloc[start_pos:end_pos]
     else:
-        df = df.tail(LIMIT)
+        df = df.tail(minute_limit)
+    
+    # If minutes == 1, skip resampling (already 1-minute data)
+    if minutes == 1:
+        df_result = df
+    else:
+        # Convert timestamp index to datetime for resampling (only filtered data)
+        df.index = pd.to_datetime(df.index, unit='s')
+        
+        # Resample to specified minute interval
+        resample_rule = f'{minutes}Min'
+        df_result = df.resample(resample_rule).agg({
+            'open': 'first',
+            'high': 'max',
+            'low': 'min',
+            'close': 'last'
+        }).dropna()
+        
+        # Convert back to timestamp index in seconds
+        df_result.index = (df_result.index.astype(int) // 10**9)
     
     # Reset index to get timestamp as column
-    df.reset_index(inplace=True)
-    df.rename(columns={df.columns[0]: 'time'}, inplace=True)
+    df_result.reset_index(inplace=True)
+    df_result.rename(columns={df_result.columns[0]: 'time'}, inplace=True)
         
-    return df
+    return df_result
 
 def _get_seconds_df(ticker: str, timestamp: int = None, direction: str = "both") -> pd.DataFrame:
     """Fetches and concatenates DataFrame for 1-second bars with filtering."""
@@ -151,18 +171,33 @@ async def get_tickers(search: str = None):
         return {"tickers": sorted_tickers[:100]}
 
 @app.get("/api/bars/{ticker}")
-async def get_bars(ticker: str, timestamp: int = None, direction = "", resolution: str = "1second"):
-    if resolution == "1minute":
-        df = _get_minutes_df(ticker, timestamp, direction)
-    elif resolution == "1second":
+async def get_bars(ticker: str, timestamp: int = None, direction = "", period: str = "second", multiplier: int = 1):
+    """
+    Get bars for a ticker with flexible period and multiplier.
+    
+    Args:
+        period: 'second', 'minute', 'hour', 'day', 'week'
+        multiplier: integer multiplier (e.g., 5 for 5-minute bars)
+    """
+    
+    if period == "second" and multiplier == 1:
         df = _get_seconds_df(ticker, timestamp, direction)
+    elif period in ["minute", "hour", "day", "week"]:
+        # Convert period to minutes
+        period_to_minutes = {
+            "minute": 1,
+            "hour": 60,
+            "day": 1440,
+            "week": 10080
+        }
+        total_minutes = period_to_minutes[period] * multiplier
+        df = _get_aggregated_minutes_df(ticker, total_minutes, timestamp, direction)
     else:
-        return {"error": f"Unsupported resolution: {resolution}"}
+        return {"error": f"Unsupported period: {period} with multiplier: {multiplier}"}
         
     if df is None or df.empty:
-        return {"error": f"No data found for {ticker} with resolution {resolution}"}
+        return {"error": f"No data found for {ticker} with {multiplier} {period} resolution"}
 
-    # Both functions now return only the required columns
     result = {"ticker": ticker, "bars": df.to_dict(orient='records')}
     
     return result
