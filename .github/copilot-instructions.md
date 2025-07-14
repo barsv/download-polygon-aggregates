@@ -113,6 +113,7 @@ aggregate_bars('AAPL')
 4. **Path Resolution**: Project modules are imported using `sys.path.append()` from subdirectories
 5. **Error Boundaries**: Data loading functions return `None` for missing data, not exceptions
 6. **CSS Styling**: Use CSS classes in `<style>` blocks, avoid inline styles except when containing variables or logic that cannot be extracted
+7. **Proactive Bug Reporting**: If you identify a potential bug or an area for improvement, report it rather than fixing it silently. This ensures that all changes are reviewed, prevents redundant work on known issues, and maintains team alignment.
 
 ## Frontend Development Standards
 
