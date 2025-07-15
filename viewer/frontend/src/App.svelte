@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { createChart, CandlestickSeries } from 'lightweight-charts';
+  import { createChart, CandlestickSeries, CrosshairMode } from 'lightweight-charts';
 
   let tickers = []; // tickers for the dropdown
   let searchInput = ''; // input to search tickers
@@ -17,12 +17,11 @@
   let noMoreForward = false; // scroling forward has reached the end
 
 
-  onMount(async () => {
+  onMount(() => {
     chart = createChart(chartContainer, {
       width: 800,
       height: 600,
       layout: {
-        backgroundColor: '#ffffff',
         textColor: 'rgba(33, 56, 77, 1)',
       },
       grid: {
@@ -34,7 +33,7 @@
         },
       },
       crosshair: {
-        mode: 'normal',
+        mode: CrosshairMode.Normal,
       },
       rightPriceScale: {
         borderColor: 'rgba(197, 203, 206, 0.8)',
@@ -90,14 +89,6 @@
       }
     });
 
-    await fetchTickers();
-    if (tickers.length > 0) {
-      const defaultTicker = tickers.includes('AAPL') ? 'AAPL' : tickers[0];
-      selectedTicker = defaultTicker;
-      searchInput = defaultTicker; // Set the input value
-      await onTickerChange();
-    }
-
     // Resize chart when container changes size
     const resizeObserver = new ResizeObserver(entries => {
       if (entries.length > 0) {
@@ -110,6 +101,18 @@
     // Cleanup observer on component destroy
     return () => resizeObserver.disconnect();
   });
+
+  async function init() {
+    await fetchTickers();
+    if (tickers.length > 0) {
+      const defaultTicker = tickers.includes('AAPL') ? 'AAPL' : tickers[0];
+      selectedTicker = defaultTicker;
+      searchInput = defaultTicker; // Set the input value
+      await onTickerChange();
+    }
+  }
+
+  init();
 
   function handleFocus(event) {
     event.target.select();
