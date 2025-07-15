@@ -1,6 +1,7 @@
-<script>
+<script lang="ts">
   import { onMount } from 'svelte';
   import { createChart, CandlestickSeries, CrosshairMode } from 'lightweight-charts';
+  import { goto } from '$app/navigation';
 
   let tickers = []; // tickers for the dropdown
   let searchInput = ''; // input to search tickers
@@ -8,14 +9,13 @@
   let chartContainer; // div to hold the chart
   let chart; // chart instance
   let candlestickSeries = null; // candlestick series for the chart
-  let loading = false; // flag to show 'Loadng...' status while fetching data
-  let visibleRangeChanging = false; // flag to prevent multiple ajax handler executions on scrolling.
+  let loading = false; // flag to show 'Loading...' status while fetching data
+  let visibleRangeChanging = false; // flag to prevent multiple ajax handler executions on scrolling
   let error = null; // error message to display if something goes wrong
   let allBars = []; // array of chart candlestick bars
   let resolution = '1second';
-  let noMoreBackward = false; // scroling backward has reached the end
-  let noMoreForward = false; // scroling forward has reached the end
-
+  let noMoreBackward = false; // scrolling backward has reached the end
+  let noMoreForward = false; // scrolling forward has reached the end
 
   onMount(() => {
     chart = createChart(chartContainer, {
@@ -76,8 +76,7 @@
             await loadChartData(selectedTicker, timestamp, "forward");
           }
         }
-      }
-      catch (e) {
+      } catch (e) {
         console.error('Error during visible range change:', e);
         error = e.message || 'An error occurred while updating the visible range.';
       } finally {
@@ -98,6 +97,9 @@
     });
     resizeObserver.observe(chartContainer);
 
+    // Initialize app after chart is created
+    init();
+
     // Cleanup observer on component destroy
     return () => resizeObserver.disconnect();
   });
@@ -111,8 +113,6 @@
       await onTickerChange();
     }
   }
-
-  init();
 
   function handleFocus(event) {
     event.target.select();
@@ -196,9 +196,8 @@
                 to:   oldRange.to,
             });
         }
-      }
-      else {
-        // if there is no data from the backend then set the flags to not request it again.
+      } else {
+        // if there is no data from the backend then set the flags to not request it again
         if (direction === "backward") {
           noMoreBackward = true;
         } else if (direction === "forward") {
@@ -224,7 +223,6 @@
         centerTimestamp = Math.floor(visibleLogicalRange.from + (visibleLogicalRange.to - visibleLogicalRange.from) / 2);
       }
     } catch (e) {
-      // If we can't get visible range, fallback to null (load latest data)
       console.warn('Could not get visible range:', e);
     }
     
@@ -285,7 +283,7 @@
 
   function openDownloadPage() {
     if (selectedTicker) {
-      window.open(`/download.html?ticker=${selectedTicker}`, '_blank');
+      goto(`/download?ticker=${selectedTicker}`);
     }
   }
 
@@ -296,8 +294,11 @@
       onTickerChange();
     }
   }
-
 </script>
+
+<svelte:head>
+  <title>Polygon Data Viewer</title>
+</svelte:head>
 
 <main>
   <div class="header">
