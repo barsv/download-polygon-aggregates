@@ -43,13 +43,10 @@ def _get_aggregated_minutes_df(ticker: str, minutes: int, timestamp: int = None,
         aggregate_bars(ticker)
         if not os.path.exists(file_path):
             return None
-    
     required_columns = ['timestamp', 'open', 'high', 'low', 'close']
-    
     # Use PyArrow for faster reading
     table = pq.read_table(file_path, columns=required_columns)
     df = table.to_pandas()
-    
     # Pre-filter minute data to reduce processing
     minute_limit = LIMIT * minutes
     if timestamp is not None:
@@ -59,7 +56,6 @@ def _get_aggregated_minutes_df(ticker: str, minutes: int, timestamp: int = None,
             # Fallback: find position using searchsorted
             pos = df.index.searchsorted(timestamp)
             pos = min(pos, len(df) - 1)
-        
         if direction == "backward":
             start_pos = max(0, pos - minute_limit + 1)
             df = df.iloc[start_pos:pos]
@@ -72,14 +68,12 @@ def _get_aggregated_minutes_df(ticker: str, minutes: int, timestamp: int = None,
             df = df.iloc[start_pos:end_pos]
     else:
         df = df.tail(minute_limit)
-    
     # If minutes == 1, skip resampling (already 1-minute data)
     if minutes == 1:
         df_result = df
     else:
         # Convert timestamp index to datetime for resampling (only filtered data)
         df.index = pd.to_datetime(df.index, unit='s')
-        
         # Resample to specified minute interval
         resample_rule = f'{minutes}Min'
         df_result = df.resample(resample_rule).agg({
@@ -88,14 +82,15 @@ def _get_aggregated_minutes_df(ticker: str, minutes: int, timestamp: int = None,
             'low': 'min',
             'close': 'last'
         }).dropna()
-        
         # Convert back to timestamp index in seconds
         df_result.index = (df_result.index.astype(int) // 10**9)
-    
+    # when we request forward data we pass the timestamp of the last visible bar, 
+    # hence we need to drop the first bar because it already exists on the chart.
+    if direction == "forward":
+        df_result = df_result.iloc[1:]
     # Reset index to get timestamp as column
     df_result.reset_index(inplace=True)
     df_result.rename(columns={df_result.columns[0]: 'time'}, inplace=True)
-        
     return df_result
 
 def _get_aggregated_seconds_df(ticker: str, seconds: int, timestamp: int = None, direction: str = "both") -> pd.DataFrame:
@@ -103,10 +98,8 @@ def _get_aggregated_seconds_df(ticker: str, seconds: int, timestamp: int = None,
     bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
     if not os.path.exists(bars_dir):
         return None
-
     all_parquet_files = sorted([f for f in os.listdir(bars_dir) if f.endswith('.parquet')])
     files_to_read = []
-
     if timestamp:
         target_year = datetime.fromtimestamp(timestamp).year
         file_name = f"{target_year}.parquet"
@@ -122,13 +115,10 @@ def _get_aggregated_seconds_df(ticker: str, seconds: int, timestamp: int = None,
                 files_to_read.append(os.path.join(bars_dir, next_year_file))
     elif all_parquet_files:
         files_to_read.append(os.path.join(bars_dir, all_parquet_files[-1]))
-
     if not files_to_read:
         return None
-
     required_columns = ['timestamp', 'open', 'high', 'low', 'close']
     df = pd.concat([pd.read_parquet(f, columns=required_columns) for f in files_to_read], ignore_index=True)
-    
     # Pre-filter second data to reduce processing
     second_limit = LIMIT * seconds
     if timestamp is not None:
@@ -146,7 +136,6 @@ def _get_aggregated_seconds_df(ticker: str, seconds: int, timestamp: int = None,
             df = df.iloc[start_idx:end_idx]
     else:
         df = df.tail(second_limit)
-    
     # If seconds == 1, skip resampling (already 1-second data)
     if seconds == 1:
         df_result = df
@@ -154,7 +143,6 @@ def _get_aggregated_seconds_df(ticker: str, seconds: int, timestamp: int = None,
         # Convert timestamp to datetime for resampling
         df['timestamp_dt'] = pd.to_datetime(df['timestamp'], unit='s')
         df.set_index('timestamp_dt', inplace=True)
-        
         # Resample to specified second interval
         resample_rule = f'{seconds}S'
         df_result = df.resample(resample_rule).agg({
@@ -163,14 +151,15 @@ def _get_aggregated_seconds_df(ticker: str, seconds: int, timestamp: int = None,
             'low': 'min',
             'close': 'last'
         }).dropna()
-        
         # Convert back to timestamp
         df_result['timestamp'] = (df_result.index.astype(int) // 10**9)
         df_result.reset_index(drop=True, inplace=True)
-    
+    # when we request forward data we pass the timestamp of the last visible bar, 
+    # hence we need to drop the first bar because it already exists on the chart.
+    if direction == "forward":
+        df_result = df_result.iloc[1:]
     # Rename timestamp column to time
     df_result.rename(columns={'timestamp': 'time'}, inplace=True)
-    
     return df_result
 
 @app.get("/api/tickers")
@@ -181,10 +170,8 @@ async def get_tickers(search: str = None):
         if ticker_details_df is not None:
             sorted_by_market_cap = ticker_details_df.sort_values('market_cap', ascending=False, na_position='last')
             sorted_tickers = sorted_by_market_cap['ticker'].tolist()
-
     if sorted_tickers is None:
         return {"error": "Ticker details not found or failed to process"}
-
     if search:
         search_lower = search.lower()
         filtered_tickers = [t for t in sorted_tickers if t.lower().startswith(search_lower)]
@@ -217,9 +204,6 @@ async def get_bars(ticker: str, timestamp: int = None, direction = "", period: s
     else:
         return {"error": f"Unsupported period: {period} with multiplier: {multiplier}"}
         
-    if df is None or df.empty:
-        return {"error": f"No data found for {ticker} with {multiplier} {period} resolution"}
-
     result = {"ticker": ticker, "bars": df.to_dict(orient='records')}
     
     return result
@@ -237,10 +221,8 @@ async def get_download_files(ticker: str):
 async def download_file(ticker: str, filename: str, format: str = "parquet"):
     bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
     file_path = os.path.join(bars_dir, filename)
-
     if not os.path.exists(file_path):
         return {"error": "File not found"}
-
     if format == "parquet":
         return FileResponse(file_path, media_type="application/octet-stream", filename=filename)
     elif format == "csv":

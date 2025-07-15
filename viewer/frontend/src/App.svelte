@@ -2,17 +2,20 @@
   import { onMount } from 'svelte';
   import { createChart, CandlestickSeries } from 'lightweight-charts';
 
-  let tickers = [];
-  let selectedTicker = '';
-  let chartContainer;
-  let chart;
-  let candlestickSeries = null;
-  let loading = false;
-  let error = null;
-  let allBars = [];
+  let tickers = []; // tickers for the dropdown
+  let searchInput = ''; // input to search tickers
+  let selectedTicker = ''; // currently selected ticker
+  let chartContainer; // div to hold the chart
+  let chart; // chart instance
+  let candlestickSeries = null; // candlestick series for the chart
+  let loading = false; // flag to show 'Loadng...' status while fetching data
+  let visibleRangeChanging = false; // flag to prevent multiple ajax handler executions on scrolling.
+  let error = null; // error message to display if something goes wrong
+  let allBars = []; // array of chart candlestick bars
   let resolution = '1second';
+  let noMoreBackward = false; // scroling backward has reached the end
+  let noMoreForward = false; // scroling forward has reached the end
 
-  let searchInput = '';
 
   onMount(async () => {
     chart = createChart(chartContainer, {
@@ -53,19 +56,37 @@
     });
 
     chart.timeScale().subscribeVisibleLogicalRangeChange(async (newVisibleLogicalRange) => {
-      if (loading || allBars.length === 0) return;
+      // if another handler is already processing then don't start a new one
+      if (visibleRangeChanging) return;
+      visibleRangeChanging = true;
+      // try/finally to restore the flag
+      try {
+        const barsInfo = candlestickSeries.barsInLogicalRange(newVisibleLogicalRange);
 
-      const barsInfo = candlestickSeries.barsInLogicalRange(newVisibleLogicalRange);
-
-      if (barsInfo !== null && barsInfo.barsBefore < 50) {
-        loading = true;
-        const oldestBar = allBars[0];
-        if (oldestBar) {
-          // Передаем точный timestamp самого старого бара для оптимизации
-          const timestamp = oldestBar.time;
-          await loadChartData(selectedTicker, timestamp, "backward");
+        if (barsInfo !== null && barsInfo.barsBefore < 50) {
+          const oldestBar = allBars[0];
+          if (oldestBar) {
+            const timestamp = oldestBar.time;
+            await loadChartData(selectedTicker, timestamp, "backward");
+          }
+        } else if (barsInfo !== null && barsInfo.barsAfter < 50) {
+          const newestBar = allBars[allBars.length - 1];
+          if (newestBar) {
+            // load data after the newest bar
+            const timestamp = newestBar.time;
+            await loadChartData(selectedTicker, timestamp, "forward");
+          }
         }
-        loading = false;
+      }
+      catch (e) {
+        console.error('Error during visible range change:', e);
+        error = e.message || 'An error occurred while updating the visible range.';
+      } finally {
+        // dirty hack is needed because after setData the visible range gets updated not immediately. don't know why.
+        // without timeout it loads data twice while scrolling.
+        setTimeout(() => {
+          visibleRangeChanging = false;
+        }, 50); // Reset the flag after a short delay
       }
     });
 
@@ -106,6 +127,8 @@
 
   async function loadChartData(ticker, timestamp = null, direction = "backward") {
     if (!ticker || !chart) return;
+    if (noMoreBackward && direction === "backward") return;
+    if (noMoreForward && direction === "forward") return;
     loading = true;
     error = null;
     try {
@@ -146,7 +169,7 @@
       const data = await res.json();
 
       if (data.error) {
-        throw new Error(data.error);
+        error = data.error;
       }
 
       if (data.bars && data.bars.length > 0) {
@@ -157,8 +180,30 @@
         } else if (direction === "both") {
           // For "both" or initial load, replace allBars
           allBars = data.bars;
+          // "both" is requested only on ticker change
+          noMoreBackward = false;
+          noMoreForward = false;
         }
+        const ts = chart.timeScale();
+        const oldRange = ts.getVisibleRange();
         candlestickSeries.setData(allBars);
+        if (oldRange) {
+            ts.setVisibleRange({
+                from: oldRange.from,
+                to:   oldRange.to,
+            });
+        }
+      }
+      else {
+        // if there is no data from the backend then set the flags to not request it again.
+        if (direction === "backward") {
+          noMoreBackward = true;
+        } else if (direction === "forward") {
+          noMoreForward = true;
+        } else {
+          noMoreBackward = true;
+          noMoreForward = true;
+        }
       }
     } catch (e) {
       error = e.message;
