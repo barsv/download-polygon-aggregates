@@ -6,6 +6,9 @@
   let loading = true;
   let error: string | null = null;
   let ticker = '';
+  let selectedFormat = 'parquet'; // 'parquet' or 'csv'
+  let timeFormat = 'timestamp'; // time format for CSV
+  let customTimeFormat = 'yyyy-MM-dd HH:mm:ss'; // for custom format input
 
   onMount(async () => {
     // Get ticker from URL params
@@ -41,8 +44,15 @@
     }
   }
 
-  function downloadFile(filename: string, format: string) {
-    const url = `/api/download/file/${ticker}/${filename}?format=${format}`;
+  function downloadFile(filename: string) {
+    let url = `/api/download/file/${ticker}/${filename}?format=${selectedFormat}`;
+    
+    // Add time format parameters for CSV
+    if (selectedFormat === 'csv' && timeFormat !== 'timestamp') {
+      const formatToUse = timeFormat === 'custom' ? customTimeFormat : timeFormat;
+      url += `&time_format=${encodeURIComponent(formatToUse)}`;
+    }
+    
     window.open(url, '_blank');
   }
 </script>
@@ -53,6 +63,44 @@
 
 <main class="container">
   <h1>Download Files {ticker ? ` for ${ticker}` : ''}</h1>
+  
+  <!-- Format selection -->
+  <div class="controls">
+    <div class="format-section">
+      <label for="format-select">File Format:</label>
+      <select id="format-select" bind:value={selectedFormat}>
+        <option value="parquet">Parquet</option>
+        <option value="csv">CSV</option>
+      </select>
+    </div>
+    
+    <!-- Time format options for CSV only -->
+    {#if selectedFormat === 'csv'}
+      <div class="time-format-section">
+        <div class="time-format-input">
+          <label for="time-format">Time Format:</label>
+          <select bind:value={timeFormat}>
+            <option value="timestamp">Timestamp (seconds)</option>
+            <option value="yyyy-MM-dd HH:mm:ss">2024-01-15 14:30:25</option>
+            <option value="yyyy-MM-dd HH:mm:ss.fff">2024-01-15 14:30:25.123</option>
+            <option value="yyyy-MM-dd'T'HH:mm:ss">2024-01-15T14:30:25</option>
+            <option value="yyyy-MM-dd'T'HH:mm:ss.fff'Z'">2024-01-15T14:30:25.123Z</option>
+            <option value="yyyy-MM-dd">2024-01-15</option>
+            <option value="MM/dd/yyyy HH:mm:ss">01/15/2024 14:30:25</option>
+            <option value="custom">Custom format...</option>
+          </select>
+          {#if timeFormat === 'custom'}
+            <input 
+              type="text" 
+              bind:value={customTimeFormat}
+              placeholder="e.g. yyyy-MM-dd HH:mm:ss"
+              class="custom-format-input"
+            />
+          {/if}
+        </div>
+      </div>
+    {/if}
+  </div>
   
   <div class="file-list-container">
     {#if loading}
@@ -66,16 +114,10 @@
             <span class="filename">{file}</span>
             <div class="download-links">
               <button 
-                class="download-button parquet"
-                on:click={() => downloadFile(file, 'parquet')}
+                class="download-button"
+                on:click={() => downloadFile(file)}
               >
-                Download Parquet
-              </button>
-              <button 
-                class="download-button csv"
-                on:click={() => downloadFile(file, 'csv')}
-              >
-                Download CSV
+                Download {selectedFormat.toUpperCase()}
               </button>
             </div>
           </li>
@@ -94,6 +136,50 @@
 
   h1 {
     font-size: 18px;
+  }
+
+  .controls {
+    margin-bottom: 20px;
+    padding: 15px;
+  }
+
+  .format-section {
+    margin-bottom: 15px;
+  }
+
+  .format-section label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+  }
+
+  .format-section select {
+    padding: 8px;
+    font-size: 14px;
+  }
+
+  .time-format-section {
+    padding-top: 15px;
+  }
+
+  .time-format-input label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+  }
+
+  .time-format-input select {
+    padding: 8px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+
+  .custom-format-input {
+    padding: 8px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+    width: 250px;
   }
 
   .file-list {
@@ -122,7 +208,6 @@
     color: white;
     border: none;
     padding: 8px 12px;
-    border-radius: 4px;
     cursor: pointer;
     text-decoration: none;
     font-size: 14px;
@@ -131,14 +216,6 @@
 
   .download-button:hover {
     background-color: #0056b3;
-  }
-
-  .download-button.csv {
-    background-color: #28a745;
-  }
-
-  .download-button.csv:hover {
-    background-color: #1e7e34;
   }
 
   .error {

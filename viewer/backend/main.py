@@ -218,7 +218,7 @@ async def get_download_files(ticker: str):
     return {"files": parquet_files}
 
 @app.get("/api/download/file/{ticker}/{filename}")
-async def download_file(ticker: str, filename: str, format: str = "parquet"):
+async def download_file(ticker: str, filename: str, format: str = "parquet", time_format: str = None):
     bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
     file_path = os.path.join(bars_dir, filename)
     if not os.path.exists(file_path):
@@ -228,6 +228,17 @@ async def download_file(ticker: str, filename: str, format: str = "parquet"):
     elif format == "csv":
         try:
             df = pd.read_parquet(file_path)
+            
+            # Format time column if time_format is provided and not 'timestamp'
+            if time_format and time_format != 'timestamp':
+                try:
+                    # Convert Python datetime format to pandas format
+                    pandas_format = time_format.replace('yyyy', '%Y').replace('MM', '%m').replace('dd', '%d').replace('HH', '%H').replace('mm', '%M').replace('ss', '%S').replace('fff', '%f')
+                    # Convert timestamp to datetime and format
+                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s').dt.strftime(pandas_format)
+                except Exception as e:
+                    return {"error": f"Failed to format time to {time_format} ({pandas_format}): {e}"}
+            
             output = io.StringIO()
             df.to_csv(output, index=False)
             output.seek(0)
