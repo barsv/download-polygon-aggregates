@@ -1,7 +1,7 @@
 +start flat files download
 +market schedule
 +ticker types
--get all tickers for all days
++get all tickers for all days
 ++ need to check that all downloaded correctly
 -- derive renames from tickers_history
 -- for all tickers dump renames from polygon
@@ -15,3 +15,8 @@
 - divs
 - short interest/volume
 - fundamentals for what dates?
+
+viewer:
+- company names
+- aggregates
+- preload
