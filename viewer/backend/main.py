@@ -175,9 +175,9 @@ async def get_tickers(search: str = None):
     if search:
         search_lower = search.lower()
         filtered_tickers = [t for t in sorted_tickers if t.lower().startswith(search_lower)]
-        return {"tickers": filtered_tickers[:50]}
     else:
-        return {"tickers": sorted_tickers[:100]}
+        filtered_tickers = sorted_tickers
+    return {"tickers": filtered_tickers[:20]}
 
 @app.get("/api/bars/{ticker}")
 async def get_bars(ticker: str, timestamp: int = None, direction = "", period: str = "second", multiplier: int = 1):
