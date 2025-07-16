@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
+  import TickerSearch from '$lib/TickerSearch.svelte';
   
   let files: string[] = [];
   let loading = true;
@@ -24,6 +25,8 @@
   });
 
   async function loadFiles() {
+    if (!ticker) return;
+    
     loading = true;
     error = null;
     
@@ -42,6 +45,11 @@
     } finally {
       loading = false;
     }
+  }
+
+  function handleTickerChange(newTicker: string) {
+    ticker = newTicker;
+    loadFiles();
   }
 
   function downloadFile(filename: string) {
@@ -64,8 +72,14 @@
 <main class="container">
   <h1>Download Files {ticker ? ` for ${ticker}` : ''}</h1>
   
-  <!-- Format selection -->
   <div class="controls">
+    <!-- Ticker selection -->
+    <div class="ticker-section">
+      <label for="ticker-input">Ticker:</label>
+      <TickerSearch value={ticker} onchange={handleTickerChange} />
+    </div>
+    
+    <!-- Format selection -->
     <div class="format-section">
       <label for="format-select">File Format:</label>
       <select id="format-select" bind:value={selectedFormat}>
@@ -141,6 +155,16 @@
   .controls {
     margin-bottom: 20px;
     padding: 15px;
+  }
+
+  .ticker-section {
+    margin-bottom: 15px;
+  }
+
+  .ticker-section label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
   }
 
   .format-section {

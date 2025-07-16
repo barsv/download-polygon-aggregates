@@ -2,9 +2,8 @@
   import { onMount } from 'svelte';
   import { createChart, CandlestickSeries, CrosshairMode, type IChartApi, type ISeriesApi } from 'lightweight-charts';
   import { goto } from '$app/navigation';
+  import TickerSearch from '$lib/TickerSearch.svelte';
 
-  let tickers: string[] = []; // tickers for the dropdown
-  let searchInput = ''; // input to search tickers
   let selectedTicker = ''; // currently selected ticker
   let chartContainer: HTMLDivElement; // div to hold the chart
   let chart: IChartApi; // chart instance
@@ -104,28 +103,10 @@
   });
 
   async function init() {
-    await fetchTickers();
-    if (tickers.length > 0) {
-      const defaultTicker = tickers.includes('AAPL') ? 'AAPL' : tickers[0];
-      selectedTicker = defaultTicker;
-      searchInput = defaultTicker; // Set the input value
-      await onTickerChange();
-    }
-  }
-
-  function handleFocus(event: Event) {
-    const target = event.target as HTMLInputElement;
-    target.select();
-  }
-
-  async function fetchTickers(searchTerm = '') {
-    let url = '/api/tickers';
-    if (searchTerm) {
-      url += `?search=${searchTerm}`;
-    }
-    const res = await fetch(url);
-    const data = await res.json();
-    tickers = data.tickers || [];
+    // Set default ticker
+    const defaultTicker = 'AAPL';
+    selectedTicker = defaultTicker;
+    await onTickerChange();
   }
 
   async function loadChartData(ticker: string, timestamp: number | null = null, direction = "backward") {
@@ -265,34 +246,14 @@
     }
   }
 
-  let debounceTimer: number;
-  function handleInput(event: Event) {
-    clearTimeout(debounceTimer);
-    const target = event.target as HTMLInputElement;
-    const searchTerm = target.value;
-    searchInput = searchTerm.toUpperCase(); // Update searchInput directly
-    debounceTimer = setTimeout(() => {
-      fetchTickers(searchTerm);
-    }, 300); // 300ms debounce
-  }
-
-  function handleBlur() {
-    if (searchInput !== selectedTicker) {
-      searchInput = selectedTicker;
-    }
+  function handleTickerChange(newTicker: string) {
+    selectedTicker = newTicker;
+    onTickerChange();
   }
 
   function openDownloadPage() {
     if (selectedTicker) {
       goto(`/download?ticker=${selectedTicker}`);
-    }
-  }
-
-  // Reactive statement to handle ticker selection immediately
-  $: {
-    if (tickers.includes(searchInput) && searchInput !== selectedTicker) {
-      selectedTicker = searchInput;
-      onTickerChange();
     }
   }
 </script>
@@ -304,17 +265,8 @@
 <main>
   <div class="header">
     <div class="left-controls">
-      <input
-        type="text"
-        id="ticker-input"
-        list="ticker-list"
-        bind:value={searchInput}
-        on:input={handleInput}
-        on:focus={handleFocus}
-        on:blur={handleBlur}
-        placeholder="e.g. AAPL"
-      />
-      <select bind:value={resolution} on:change={onTickerChange}>
+      <TickerSearch value={selectedTicker} onchange={handleTickerChange} />
+      <select bind:value={resolution} onchange={onTickerChange}>
         <option value="1second">1 Second</option>
         <option value="5second">5 Seconds</option>
         <option value="10second">10 Seconds</option>
@@ -337,13 +289,8 @@
       {/if}
     </div>
     <div class="right-controls">
-      <button on:click={openDownloadPage} class="download-button">Download</button>
+      <button onclick={openDownloadPage} class="download-button">Download</button>
     </div>
-    <datalist id="ticker-list">
-      {#each tickers as ticker}
-        <option value={ticker}>{ticker}</option>
-      {/each}
-    </datalist>
   </div>
 
   <div bind:this={chartContainer} class="chart-container"></div>
