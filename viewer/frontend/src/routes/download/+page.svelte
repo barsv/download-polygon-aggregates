@@ -3,13 +3,13 @@
   import { page } from '$app/stores';
   import TickerSearch from '$lib/TickerSearch.svelte';
   
-  let files: string[] = [];
-  let loading = true;
-  let error: string | null = null;
-  let ticker = '';
-  let selectedFormat = 'parquet'; // 'parquet' or 'csv'
-  let timeFormat = 'timestamp'; // time format for CSV
-  let customTimeFormat = 'yyyy-MM-dd HH:mm:ss'; // for custom format input
+  let files = $state<string[]>([]);
+  let loading = $state(true);
+  let error = $state<string | null>(null);
+  let ticker = $state('');
+  let selectedFormat = $state('parquet');
+  let timeFormat = $state('timestamp');
+  let customTimeFormat = $state('yyyy-MM-dd HH:mm:ss');
 
   onMount(async () => {
     // Get ticker from URL params
@@ -129,7 +129,7 @@
             <div class="download-links">
               <button 
                 class="download-button"
-                on:click={() => downloadFile(file)}
+                onclick={() => downloadFile(file)}
               >
                 Download {selectedFormat.toUpperCase()}
               </button>

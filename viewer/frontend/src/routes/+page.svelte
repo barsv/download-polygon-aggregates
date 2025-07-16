@@ -4,19 +4,21 @@
   import { goto } from '$app/navigation';
   import TickerSearch from '$lib/TickerSearch.svelte';
 
-  let selectedTicker = ''; // currently selected ticker
-  let chartContainer: HTMLDivElement; // div to hold the chart
-  let chart: IChartApi; // chart instance
-  let candlestickSeries: ISeriesApi<'Candlestick'> | null = null; // candlestick series for the chart
-  let loading = false; // flag to show 'Loading...' status while fetching data
-  let visibleRangeChanging = false; // flag to prevent multiple ajax handler executions on scrolling
-  let error: string | null = null; // error message to display if something goes wrong
-  let allBars: any[] = []; // array of chart candlestick bars
-  let resolution = '1second';
-  let noMoreBackward = false; // scrolling backward has reached the end
-  let noMoreForward = false; // scrolling forward has reached the end
+  let selectedTicker = $state('');
+  let chartContainer = $state<HTMLDivElement>();
+  let chart = $state<IChartApi>();
+  let candlestickSeries = $state<ISeriesApi<'Candlestick'> | null>(null);
+  let loading = $state(false);
+  let visibleRangeChanging = $state(false);
+  let error = $state<string | null>(null);
+  let allBars = $state<any[]>([]);
+  let resolution = $state('1second');
+  let noMoreBackward = $state(false);
+  let noMoreForward = $state(false);
 
   onMount(() => {
+    if (!chartContainer) return;
+    
     chart = createChart(chartContainer, {
       width: 800,
       height: 600,
@@ -88,12 +90,14 @@
 
     // Resize chart when container changes size
     const resizeObserver = new ResizeObserver(entries => {
-      if (entries.length > 0) {
+      if (entries.length > 0 && chart) {
         const { width, height } = entries[0].contentRect;
         chart.resize(width, height - 5);
       }
     });
-    resizeObserver.observe(chartContainer);
+    if (chartContainer) {
+      resizeObserver.observe(chartContainer);
+    }
 
     // Initialize app after chart is created
     init();
@@ -196,6 +200,8 @@
   }
 
   async function onTickerChange() {
+    if (!chart) return;
+    
     // Try to get current visible time range before clearing data
     let centerTimestamp = null;
     try {
@@ -236,10 +242,12 @@
         const fromTime = allBars[startIndex].time;
         const toTime = allBars[endIndex].time;
         
-        chart.timeScale().setVisibleRange({
-          from: fromTime,
-          to: toTime
-        });
+        if (chart) {
+          chart.timeScale().setVisibleRange({
+            from: fromTime,
+            to: toTime
+          });
+        }
       } catch (e) {
         console.warn('Could not set visible range:', e);
       }
