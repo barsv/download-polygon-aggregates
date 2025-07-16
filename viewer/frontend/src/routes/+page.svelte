@@ -1,18 +1,18 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { createChart, CandlestickSeries, CrosshairMode } from 'lightweight-charts';
+  import { createChart, CandlestickSeries, CrosshairMode, type IChartApi, type ISeriesApi } from 'lightweight-charts';
   import { goto } from '$app/navigation';
 
-  let tickers = []; // tickers for the dropdown
+  let tickers: string[] = []; // tickers for the dropdown
   let searchInput = ''; // input to search tickers
   let selectedTicker = ''; // currently selected ticker
-  let chartContainer; // div to hold the chart
-  let chart; // chart instance
-  let candlestickSeries = null; // candlestick series for the chart
+  let chartContainer: HTMLDivElement; // div to hold the chart
+  let chart: IChartApi; // chart instance
+  let candlestickSeries: ISeriesApi<'Candlestick'> | null = null; // candlestick series for the chart
   let loading = false; // flag to show 'Loading...' status while fetching data
   let visibleRangeChanging = false; // flag to prevent multiple ajax handler executions on scrolling
-  let error = null; // error message to display if something goes wrong
-  let allBars = []; // array of chart candlestick bars
+  let error: string | null = null; // error message to display if something goes wrong
+  let allBars: any[] = []; // array of chart candlestick bars
   let resolution = '1second';
   let noMoreBackward = false; // scrolling backward has reached the end
   let noMoreForward = false; // scrolling forward has reached the end
@@ -60,26 +60,25 @@
       visibleRangeChanging = true;
       // try/finally to restore the flag
       try {
-        const barsInfo = candlestickSeries.barsInLogicalRange(newVisibleLogicalRange);
+        const barsInfo = newVisibleLogicalRange ? candlestickSeries?.barsInLogicalRange(newVisibleLogicalRange) : null;
 
-        if (barsInfo !== null && barsInfo.barsBefore < 50) {
+        if (barsInfo && barsInfo.barsBefore < 50) {
           const oldestBar = allBars[0];
           if (oldestBar) {
             const timestamp = oldestBar.time;
             await loadChartData(selectedTicker, timestamp, "backward");
           }
-        } else if (barsInfo !== null && barsInfo.barsAfter < 50) {
+        } else if (barsInfo && barsInfo.barsAfter < 50) {
           const newestBar = allBars[allBars.length - 1];
           if (newestBar) {
             // load data after the newest bar
             const timestamp = newestBar.time;
             await loadChartData(selectedTicker, timestamp, "forward");
           }
-        }
-      } catch (e) {
-        console.error('Error during visible range change:', e);
-        error = e.message || 'An error occurred while updating the visible range.';
-      } finally {
+        }        } catch (e: any) {
+          console.error('Error during visible range change:', e);
+          error = e.message || 'An error occurred while updating the visible range.';
+        } finally {
         // dirty hack is needed because after setData the visible range gets updated not immediately. don't know why.
         // without timeout it loads data twice while scrolling.
         setTimeout(() => {
@@ -114,8 +113,9 @@
     }
   }
 
-  function handleFocus(event) {
-    event.target.select();
+  function handleFocus(event: Event) {
+    const target = event.target as HTMLInputElement;
+    target.select();
   }
 
   async function fetchTickers(searchTerm = '') {
@@ -128,7 +128,7 @@
     tickers = data.tickers || [];
   }
 
-  async function loadChartData(ticker, timestamp = null, direction = "backward") {
+  async function loadChartData(ticker: string, timestamp: number | null = null, direction = "backward") {
     if (!ticker || !chart) return;
     if (noMoreBackward && direction === "backward") return;
     if (noMoreForward && direction === "forward") return;
@@ -138,7 +138,7 @@
       let url = `/api/bars/${ticker}`;
       const params = new URLSearchParams();
       if (timestamp) {
-        params.append('timestamp', timestamp);
+        params.append('timestamp', timestamp.toString());
       }
       params.append('direction', direction);
       
@@ -160,7 +160,7 @@
         '10080minute': { period: 'week', multiplier: 1 }
       };
       
-      const config = resolutionMap[resolution] || { period: 'second', multiplier: 1 };
+      const config = (resolutionMap as any)[resolution] || { period: 'second', multiplier: 1 };
       params.append('period', config.period);
       params.append('multiplier', config.multiplier.toString());
       
@@ -189,7 +189,7 @@
         }
         const ts = chart.timeScale();
         const oldRange = ts.getVisibleRange();
-        candlestickSeries.setData(allBars);
+        candlestickSeries?.setData(allBars);
         if (oldRange) {
             ts.setVisibleRange({
                 from: oldRange.from,
@@ -207,7 +207,7 @@
           noMoreForward = true;
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       error = e.message;
     } finally {
       loading = false;
@@ -220,7 +220,7 @@
     try {
       const visibleLogicalRange = chart.timeScale().getVisibleRange();
       if (visibleLogicalRange) {
-        centerTimestamp = Math.floor(visibleLogicalRange.from + (visibleLogicalRange.to - visibleLogicalRange.from) / 2);
+        centerTimestamp = Math.floor((visibleLogicalRange.from as number) + ((visibleLogicalRange.to as number) - (visibleLogicalRange.from as number)) / 2);
       }
     } catch (e) {
       console.warn('Could not get visible range:', e);
@@ -265,10 +265,11 @@
     }
   }
 
-  let debounceTimer;
-  function handleInput(event) {
+  let debounceTimer: number;
+  function handleInput(event: Event) {
     clearTimeout(debounceTimer);
-    const searchTerm = event.target.value;
+    const target = event.target as HTMLInputElement;
+    const searchTerm = target.value;
     searchInput = searchTerm.toUpperCase(); // Update searchInput directly
     debounceTimer = setTimeout(() => {
       fetchTickers(searchTerm);
