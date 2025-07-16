@@ -105,6 +105,9 @@ def save_to_parquet(df, filepath):
     # Check if DataFrame is empty
     if df.empty:
         logger.warning(f"No data to save to {filepath}")
+        # create a file so that it will be clear that there is no data and no need to request api again.
+        with open(f'{filepath}.txt', 'w') as f:
+            f.write('no data')
         return
     # Optimize data types
     df_opt = df.copy()
@@ -128,17 +131,14 @@ def download_second_bars(ticker, start_date, end_date, multiplier=1, timespan='s
     start = datetime.strptime(start_date, '%Y-%m-%d')
     end = datetime.strptime(end_date, '%Y-%m-%d')
     current_start = start
-    output_dir = os.path.join(OUTPUT_DIR, f'{multiplier}{timespan}', ticker)
+    fixed_ticker = ticker if ticker != 'PRN' and ticker != 'CON' and ticker != 'NUL' and ticker != 'AUX' else f'{ticker}-'
+    output_dir = os.path.join(OUTPUT_DIR, f'{multiplier}{timespan}', fixed_ticker)
     os.makedirs(output_dir, exist_ok=True)
-    # Remove existing file to avoid appending to old data
-    output_path = os.path.join(output_dir, f"{ticker}.csv")
-    if os.path.exists(output_path):
-        os.remove(output_path)
     while current_start < end:
         last_day_of_year = get_last_day_of_year(current_start)
         current_end = min(last_day_of_year, end)
         file_name = f"{current_start.year}.parquet"
-        if os.path.exists(os.path.join(output_dir, file_name)):
+        if os.path.exists(os.path.join(output_dir, file_name)) or os.path.exists(os.path.join(output_dir, f'{file_name}.txt')):
             logger.info(f"File {file_name} already exists, skipping download for {ticker} from {current_start} to {current_end}")
         else:
             logger.info(f"Processing: {file_name}")
