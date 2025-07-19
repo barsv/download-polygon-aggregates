@@ -10,10 +10,25 @@
   let selectedFormat = $state('parquet');
   let timeFormat = $state('timestamp');
   let customTimeFormat = $state('yyyy-MM-dd HH:mm:ss');
+  let selectedPeriod = $state('1second');
+
+  function parsePeriod(periodStr: string) {
+    const match = periodStr.match(/^(\d+)(\w+)$/);
+    return {
+      multiplier: match ? parseInt(match[1]) : 1,
+      period: match ? match[2] : 'second'
+    };
+  }
 
   onMount(async () => {
     // Get ticker from URL params
     ticker = $page.url.searchParams.get('ticker') || '';
+    
+    // Get period from URL params (passed from main chart page)
+    const urlPeriod = $page.url.searchParams.get('period');
+    if (urlPeriod) {
+      selectedPeriod = urlPeriod;
+    }
 
     if (!ticker) {
       error = 'No ticker specified.';
@@ -31,7 +46,20 @@
     error = null;
     
     try {
-      const response = await fetch(`/api/download/files/${ticker}`);
+      const { multiplier, period } = parsePeriod(selectedPeriod);
+      
+      const params = new URLSearchParams();
+      if (period !== 'second' || multiplier !== 1) {
+        params.append('period', period);
+        params.append('multiplier', multiplier.toString());
+      }
+      
+      let url = `/api/download/files/${ticker}`;
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
+      
+      const response = await fetch(url);
       const data = await response.json();
 
       if (data.error) {
@@ -52,8 +80,19 @@
     loadFiles();
   }
 
+  function handlePeriodChange() {
+    loadFiles();
+  }
+
   function downloadFile(filename: string) {
+    const { multiplier, period } = parsePeriod(selectedPeriod);
+    
     let url = `/api/download/file/${ticker}/${filename}?format=${selectedFormat}`;
+    
+    // Add period parameters if not default
+    if (period !== 'second' || multiplier !== 1) {
+      url += `&period=${period}&multiplier=${multiplier}`;
+    }
     
     // Add time format parameters for CSV
     if (selectedFormat === 'csv' && timeFormat !== 'timestamp') {
@@ -85,6 +124,27 @@
       <select id="format-select" bind:value={selectedFormat}>
         <option value="parquet">Parquet</option>
         <option value="csv">CSV</option>
+      </select>
+    </div>
+    
+    <!-- Period selection -->
+    <div class="period-section">
+      <label for="period-select">Period:</label>
+      <select id="period-select" bind:value={selectedPeriod} onchange={handlePeriodChange}>
+        <option value="1second">1 Second</option>
+        <option value="5second">5 Seconds</option>
+        <option value="10second">10 Seconds</option>
+        <option value="15second">15 Seconds</option>
+        <option value="30second">30 Seconds</option>
+        <option value="1minute">1 Minute</option>
+        <option value="5minute">5 Minutes</option>
+        <option value="15minute">15 Minutes</option>
+        <option value="30minute">30 Minutes</option>
+        <option value="60minute">1 Hour</option>
+        <option value="240minute">4 Hours</option>
+        <option value="720minute">12 Hours</option>
+        <option value="1440minute">1 Day</option>
+        <option value="10080minute">1 Week</option>
       </select>
     </div>
     
@@ -171,15 +231,21 @@
     margin-bottom: 15px;
   }
 
-  .format-section label {
+  .format-section label,
+  .period-section label {
     display: block;
     margin-bottom: 5px;
     font-weight: bold;
   }
 
-  .format-section select {
+  .format-section select,
+  .period-section select {
     padding: 8px;
     font-size: 14px;
+  }
+
+  .period-section {
+    margin-bottom: 15px;
   }
 
   .time-format-section {

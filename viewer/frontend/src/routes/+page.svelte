@@ -261,7 +261,7 @@
 
   function openDownloadPage() {
     if (selectedTicker) {
-      goto(`/download?ticker=${selectedTicker}`);
+      goto(`/download?ticker=${selectedTicker}&period=${resolution}`);
     }
   }
 </script>

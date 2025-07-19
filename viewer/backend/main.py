@@ -22,6 +22,49 @@ app = FastAPI()
 ticker_details_df = None
 sorted_tickers = None
 
+def aggregate_ohlc_data(df: pd.DataFrame, target_seconds: int, timestamp_col: str = 'timestamp') -> pd.DataFrame:
+    """
+    Universal OHLC aggregation function.
+    
+    Args:
+        df: DataFrame with OHLC data and timestamp column
+        target_seconds: Target aggregation interval in seconds (60 = 1min, 3600 = 1hour, etc.)
+        timestamp_col: Name of timestamp column
+    
+    Returns:
+        Aggregated DataFrame (modifies input DataFrame!)
+    """
+    if target_seconds <= 1:
+        return df  # No aggregation needed
+    
+    # Convert timestamp to datetime for resampling
+    df['datetime_idx'] = pd.to_datetime(df[timestamp_col], unit='s')
+    df.set_index('datetime_idx', inplace=True)
+    
+    # Generate resample rule
+    if target_seconds < 60:
+        resample_rule = f'{target_seconds}S'
+    elif target_seconds < 3600:
+        resample_rule = f'{target_seconds // 60}Min'
+    elif target_seconds < 86400:
+        resample_rule = f'{target_seconds // 3600}H'
+    else:
+        resample_rule = f'{target_seconds // 86400}D'
+    
+    # Aggregate OHLC data
+    result = df.resample(resample_rule).agg({
+        'open': 'first',
+        'high': 'max',
+        'low': 'min',
+        'close': 'last'
+    }).dropna()
+    
+    # Convert back to timestamp
+    result[timestamp_col] = (result.index.astype(int) // 10**9)
+    result.reset_index(drop=True, inplace=True)
+    
+    return result
+
 def load_ticker_details():
     """Load ticker details from the CSV file."""
     tickers_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'tickers')
@@ -44,7 +87,7 @@ def _get_aggregated_minutes_df(ticker: str, minutes: int, timestamp: int = None,
         if not os.path.exists(file_path):
             return None
     required_columns = ['timestamp', 'open', 'high', 'low', 'close']
-    # Use PyArrow for faster reading
+    # Use PyArrow for faster разработкаreading
     table = pq.read_table(file_path, columns=required_columns)
     df = table.to_pandas()
     # Pre-filter minute data to reduce processing
@@ -72,18 +115,8 @@ def _get_aggregated_minutes_df(ticker: str, minutes: int, timestamp: int = None,
     if minutes == 1:
         df_result = df
     else:
-        # Convert timestamp index to datetime for resampling (only filtered data)
-        df.index = pd.to_datetime(df.index, unit='s')
-        # Resample to specified minute interval
-        resample_rule = f'{minutes}Min'
-        df_result = df.resample(resample_rule).agg({
-            'open': 'first',
-            'high': 'max',
-            'low': 'min',
-            'close': 'last'
-        }).dropna()
-        # Convert back to timestamp index in seconds
-        df_result.index = (df_result.index.astype(int) // 10**9)
+        # Use universal aggregation function
+        df_result = aggregate_ohlc_data(df, minutes * 60)  # Convert minutes to seconds
     # when we request forward data we pass the timestamp of the last visible bar, 
     # hence we need to drop the first bar because it already exists on the chart.
     if direction == "forward":
@@ -140,20 +173,8 @@ def _get_aggregated_seconds_df(ticker: str, seconds: int, timestamp: int = None,
     if seconds == 1:
         df_result = df
     else:
-        # Convert timestamp to datetime for resampling
-        df['timestamp_dt'] = pd.to_datetime(df['timestamp'], unit='s')
-        df.set_index('timestamp_dt', inplace=True)
-        # Resample to specified second interval
-        resample_rule = f'{seconds}S'
-        df_result = df.resample(resample_rule).agg({
-            'open': 'first',
-            'high': 'max',
-            'low': 'min',
-            'close': 'last'
-        }).dropna()
-        # Convert back to timestamp
-        df_result['timestamp'] = (df_result.index.astype(int) // 10**9)
-        df_result.reset_index(drop=True, inplace=True)
+        # Use universal aggregation function
+        df_result = aggregate_ohlc_data(df, seconds)
     # when we request forward data we pass the timestamp of the last visible bar, 
     # hence we need to drop the first bar because it already exists on the chart.
     if direction == "forward":
@@ -188,7 +209,6 @@ async def get_bars(ticker: str, timestamp: int = None, direction = "", period: s
         period: 'second', 'minute', 'hour', 'day', 'week'
         multiplier: integer multiplier (e.g., 5 for 5-minute bars)
     """
-    
     if period == "second":
         df = _get_aggregated_seconds_df(ticker, multiplier, timestamp, direction)
     elif period in ["minute", "hour", "day", "week"]:
@@ -203,33 +223,95 @@ async def get_bars(ticker: str, timestamp: int = None, direction = "", period: s
         df = _get_aggregated_minutes_df(ticker, total_minutes, timestamp, direction)
     else:
         return {"error": f"Unsupported period: {period} with multiplier: {multiplier}"}
-        
     result = {"ticker": ticker, "bars": df.to_dict(orient='records')}
-    
     return result
 
 @app.get("/api/download/files/{ticker}")
-async def get_download_files(ticker: str):
-    bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
-    if not os.path.exists(bars_dir):
-        return {"error": "Bars data not found for this ticker"}
-    
-    parquet_files = sorted([f for f in os.listdir(bars_dir) if f.endswith('.parquet')])
-    return {"files": parquet_files}
+async def get_download_files(ticker: str, period: str = "second", multiplier: int = 1):
+    if period == "second":
+        # For seconds, return yearly files
+        bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
+        if not os.path.exists(bars_dir):
+            return {"error": "Bars data not found for this ticker"}
+        parquet_files = sorted([f for f in os.listdir(bars_dir) if f.endswith('.parquet')])
+        return {"files": parquet_files}
+    elif period in ["minute", "hour", "day", "week"]:
+        # For minute+ periods, return a single aggregated file option
+        # Check if we have minute data available
+        bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1minute')
+        file_path = os.path.join(bars_dir, f"{ticker}.parquet")
+        if not os.path.exists(file_path):
+            # Try to aggregate from seconds data
+            seconds_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
+            if not os.path.exists(seconds_dir):
+                return {"error": "No data found for this ticker"}
+            # The aggregate_bars function will be called when downloading
+        # Generate a virtual filename for the aggregated data
+        period_suffix = f"_{multiplier}{period[0]}" if multiplier > 1 else f"_{period}"
+        virtual_filename = f"{ticker}{period_suffix}.parquet"
+        return {"files": [virtual_filename]}
+    else:
+        return {"error": f"Unsupported period: {period}"}
 
 @app.get("/api/download/file/{ticker}/{filename}")
-async def download_file(ticker: str, filename: str, format: str = "parquet", time_format: str = None):
-    bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
-    file_path = os.path.join(bars_dir, filename)
+async def download_file(ticker: str, filename: str, format: str = "parquet", time_format: str = None, period: str = "second", multiplier: int = 1):
+    if period not in ["second", "minute", "hour", "day", "week"]:
+        return {"error": f"Unsupported period: {period}"}
+    if format not in ["parquet", "csv"]:
+        return {"error": f"Unsupported format: {format}"}
+    if multiplier < 1 or not isinstance(multiplier, int) or multiplier > 10080:
+        return {"error": "Multiplier is not valid"}
+    # check that ticker is alphanumeric or dots, dashes, underscores
+    if not ticker.replace('.', '').replace('-', '').replace('_', '').isalnum():
+        return {"error": "Ticker is not valid"}
+    if period == "second":
+        # get year from filename
+        year = filename.split('.')[0].split('_')[-1]
+        # check that 'year' is an int between 2003 and 2050
+        if not year.isdigit() or not (2003 <= int(year) <= 2050):
+            return {"error": "Year is not valid"}
+    # load file
+    if period == "second":
+        bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
+        file_path = os.path.join(bars_dir, f"{year}.parquet")
+    else:
+        bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1minute')
+        file_path = os.path.join(bars_dir, f"{ticker}.parquet")
     if not os.path.exists(file_path):
         return {"error": "File not found"}
+    df = pd.read_parquet(file_path)
+    # aggegate
+    if period == "second":
+        if multiplier > 1:
+            df = aggregate_ohlc_data(df, multiplier)
+    else:
+        period_to_minutes = {
+            "minute": 1,
+            "hour": 60,
+            "day": 1440,
+            "week": 10080
+        }
+        total_minutes = period_to_minutes[period] * multiplier
+        if total_minutes > 1:
+            df.reset_index(inplace=True)
+            df.rename(columns={df.columns[0]: 'timestamp'}, inplace=True)
+            df = aggregate_ohlc_data(df, total_minutes * 60)
+        else:
+            df.reset_index(inplace=True)
+            df.rename(columns={df.columns[0]: 'timestamp'}, inplace=True)
+    # return the file
+    if period == "second":
+        result_filename = f"{ticker}_{multiplier}{period}_{year}.{format}"
+    else:
+        result_filename = f"{ticker}_{multiplier}{period}.{format}"
     if format == "parquet":
-        return FileResponse(file_path, media_type="application/octet-stream", filename=filename)
+        output = io.BytesIO()
+        table = pa.table(df)
+        pq.write_table(table, output)
+        output.seek(0)
+        return StreamingResponse(output, media_type="application/octet-stream", headers={'Content-Disposition': f'attachment; filename="{result_filename}"'})
     elif format == "csv":
         try:
-            df = pd.read_parquet(file_path)
-            
-            # Format time column if time_format is provided and not 'timestamp'
             if time_format and time_format != 'timestamp':
                 try:
                     # Convert Python datetime format to pandas format
@@ -238,12 +320,10 @@ async def download_file(ticker: str, filename: str, format: str = "parquet", tim
                     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s').dt.strftime(pandas_format)
                 except Exception as e:
                     return {"error": f"Failed to format time to {time_format} ({pandas_format}): {e}"}
-            
             output = io.StringIO()
             df.to_csv(output, index=False)
             output.seek(0)
-            csv_filename = filename.replace(".parquet", ".csv")
-            return StreamingResponse(io.BytesIO(output.getvalue().encode('utf-8')), media_type="text/csv", headers={'Content-Disposition': f'attachment; filename="{csv_filename}"'})
+            return StreamingResponse(io.BytesIO(output.getvalue().encode('utf-8')), media_type="text/csv", headers={'Content-Disposition': f'attachment; filename="{result_filename}"'})
         except Exception as e:
             return {"error": f"Error converting to CSV: {e}"}
     else:
