@@ -12,7 +12,7 @@
   let visibleRangeChanging = $state(false);
   let error = $state<string | null>(null);
   let allBars = $state<any[]>([]);
-  let resolution = $state('1second');
+  let interval = $state('1S');
   let noMoreBackward = $state(false);
   let noMoreForward = $state(false);
 
@@ -127,27 +127,8 @@
       }
       params.append('direction', direction);
       
-      // Map resolution to period and multiplier for backend
-      const resolutionMap = {
-        '1second': { period: 'second', multiplier: 1 },
-        '5second': { period: 'second', multiplier: 5 },
-        '10second': { period: 'second', multiplier: 10 },
-        '15second': { period: 'second', multiplier: 15 },
-        '30second': { period: 'second', multiplier: 30 },
-        '1minute': { period: 'minute', multiplier: 1 },
-        '5minute': { period: 'minute', multiplier: 5 },
-        '15minute': { period: 'minute', multiplier: 15 },
-        '30minute': { period: 'minute', multiplier: 30 },
-        '60minute': { period: 'hour', multiplier: 1 },
-        '240minute': { period: 'hour', multiplier: 4 },
-        '720minute': { period: 'hour', multiplier: 12 },
-        '1440minute': { period: 'day', multiplier: 1 },
-        '10080minute': { period: 'week', multiplier: 1 }
-      };
-      
-      const config = (resolutionMap as any)[resolution] || { period: 'second', multiplier: 1 };
-      params.append('period', config.period);
-      params.append('multiplier', config.multiplier.toString());
+      // Use interval directly in API call
+      params.append('interval', interval);
       
       if (params.toString()) {
         url += `?${params.toString()}`;
@@ -261,7 +242,7 @@
 
   function openDownloadPage() {
     if (selectedTicker) {
-      goto(`/download?ticker=${selectedTicker}&period=${resolution}`);
+      goto(`/download?ticker=${selectedTicker}&interval=${interval}`);
     }
   }
 </script>
@@ -274,21 +255,21 @@
   <div class="header">
     <div class="left-controls">
       <TickerSearch value={selectedTicker} onchange={handleTickerChange} />
-      <select bind:value={resolution} onchange={onTickerChange}>
-        <option value="1second">1 Second</option>
-        <option value="5second">5 Seconds</option>
-        <option value="10second">10 Seconds</option>
-        <option value="15second">15 Seconds</option>
-        <option value="30second">30 Seconds</option>
-        <option value="1minute">1 Minute</option>
-        <option value="5minute">5 Minutes</option>
-        <option value="15minute">15 Minutes</option>
-        <option value="30minute">30 Minutes</option>
-        <option value="60minute">1 Hour</option>
-        <option value="240minute">4 Hours</option>
-        <option value="720minute">12 Hours</option>
-        <option value="1440minute">1 Day</option>
-        <option value="10080minute">1 Week</option>
+      <select bind:value={interval} onchange={onTickerChange}>
+        <option value="1S">1 Second</option>
+        <option value="5S">5 Seconds</option>
+        <option value="10S">10 Seconds</option>
+        <option value="15S">15 Seconds</option>
+        <option value="30S">30 Seconds</option>
+        <option value="1M">1 Minute</option>
+        <option value="5M">5 Minutes</option>
+        <option value="15M">15 Minutes</option>
+        <option value="30M">30 Minutes</option>
+        <option value="1H">1 Hour</option>
+        <option value="4H">4 Hours</option>
+        <option value="12H">12 Hours</option>
+        <option value="1D">1 Day</option>
+        <option value="1W">1 Week</option>
       </select>
       {#if loading}
         <div class="status-indicator">Loading...</div>

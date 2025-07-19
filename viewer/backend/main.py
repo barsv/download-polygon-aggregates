@@ -22,34 +22,54 @@ app = FastAPI()
 ticker_details_df = None
 sorted_tickers = None
 
-def aggregate_ohlc_data(df: pd.DataFrame, target_seconds: int, timestamp_col: str = 'timestamp') -> pd.DataFrame:
+def resample_rule_to_seconds(rule: str) -> int:
+    """Convert pandas resample rule to seconds."""
+    import re
+    match = re.match(r'^(\d+)([SMHDW])$', rule.upper())
+    if not match:
+        raise ValueError(f"Invalid resample rule: {rule}")
+    
+    number, unit = match.groups()
+    number = int(number)
+    
+    multipliers = {
+        'S': 1,           # seconds
+        'M': 60,          # minutes  
+        'H': 3600,        # hours
+        'D': 86400,       # days
+        'W': 604800       # weeks
+    }
+    
+    return number * multipliers[unit]
+
+def validate_resample_rule(rule: str) -> bool:
+    """Validate if resample rule is allowed."""
+    allowed_rules = [
+        '1S', '5S', '10S', '15S', '30S',
+        '1M', '5M', '15M', '30M', 
+        '1H', '4H', '12H',
+        '1D', '1W'
+    ]
+    return rule in allowed_rules
+
+def aggregate_ohlc_data(df: pd.DataFrame, resample_rule: str, timestamp_col: str = 'timestamp') -> pd.DataFrame:
     """
     Universal OHLC aggregation function.
     
     Args:
         df: DataFrame with OHLC data and timestamp column
-        target_seconds: Target aggregation interval in seconds (60 = 1min, 3600 = 1hour, etc.)
+        resample_rule: Pandas resample rule (e.g., '5S', '1M', '4H', '1D')
         timestamp_col: Name of timestamp column
     
     Returns:
         Aggregated DataFrame (modifies input DataFrame!)
     """
-    if target_seconds <= 1:
-        return df  # No aggregation needed
+    if resample_rule == '1S':
+        return df  # No aggregation needed for 1 second
     
     # Convert timestamp to datetime for resampling
     df['datetime_idx'] = pd.to_datetime(df[timestamp_col], unit='s')
     df.set_index('datetime_idx', inplace=True)
-    
-    # Generate resample rule
-    if target_seconds < 60:
-        resample_rule = f'{target_seconds}S'
-    elif target_seconds < 3600:
-        resample_rule = f'{target_seconds // 60}Min'
-    elif target_seconds < 86400:
-        resample_rule = f'{target_seconds // 3600}H'
-    else:
-        resample_rule = f'{target_seconds // 86400}D'
     
     # Aggregate OHLC data
     result = df.resample(resample_rule).agg({
@@ -116,7 +136,7 @@ def _get_aggregated_minutes_df(ticker: str, minutes: int, timestamp: int = None,
         df_result = df
     else:
         # Use universal aggregation function
-        df_result = aggregate_ohlc_data(df, minutes * 60)  # Convert minutes to seconds
+        df_result = aggregate_ohlc_data(df, f'{minutes}M')  # M for minutes in pandas
     # when we request forward data we pass the timestamp of the last visible bar, 
     # hence we need to drop the first bar because it already exists on the chart.
     if direction == "forward":
@@ -174,7 +194,7 @@ def _get_aggregated_seconds_df(ticker: str, seconds: int, timestamp: int = None,
         df_result = df
     else:
         # Use universal aggregation function
-        df_result = aggregate_ohlc_data(df, seconds)
+        df_result = aggregate_ohlc_data(df, f'{seconds}S')
     # when we request forward data we pass the timestamp of the last visible bar, 
     # hence we need to drop the first bar because it already exists on the chart.
     if direction == "forward":
@@ -201,43 +221,46 @@ async def get_tickers(search: str = None):
     return {"tickers": filtered_tickers[:20]}
 
 @app.get("/api/bars/{ticker}")
-async def get_bars(ticker: str, timestamp: int = None, direction = "", period: str = "second", multiplier: int = 1):
+async def get_bars(ticker: str, timestamp: int = None, direction = "", interval: str = "1S"):
     """
-    Get bars for a ticker with flexible period and multiplier.
+    Get bars for a ticker with specified interval.
     
     Args:
-        period: 'second', 'minute', 'hour', 'day', 'week'
-        multiplier: integer multiplier (e.g., 5 for 5-minute bars)
+        interval: Resample rule (e.g., '1S', '5S', '1M', '5M', '1H', '4H', '1D', '1W')
     """
-    if period == "second":
-        df = _get_aggregated_seconds_df(ticker, multiplier, timestamp, direction)
-    elif period in ["minute", "hour", "day", "week"]:
-        # Convert period to minutes
-        period_to_minutes = {
-            "minute": 1,
-            "hour": 60,
-            "day": 1440,
-            "week": 10080
-        }
-        total_minutes = period_to_minutes[period] * multiplier
-        df = _get_aggregated_minutes_df(ticker, total_minutes, timestamp, direction)
+    if not validate_resample_rule(interval):
+        return {"error": f"Unsupported interval: {interval}"}
+    
+    # Determine if we need seconds or minutes data
+    interval_seconds = resample_rule_to_seconds(interval)
+    
+    if interval_seconds < 60:
+        # Use seconds data
+        df = _get_aggregated_seconds_df(ticker, interval_seconds, timestamp, direction)
     else:
-        return {"error": f"Unsupported period: {period} with multiplier: {multiplier}"}
+        # Use minutes data
+        interval_minutes = interval_seconds // 60
+        df = _get_aggregated_minutes_df(ticker, interval_minutes, timestamp, direction)
+    
     result = {"ticker": ticker, "bars": df.to_dict(orient='records')}
     return result
 
 @app.get("/api/download/files/{ticker}")
-async def get_download_files(ticker: str, period: str = "second", multiplier: int = 1):
-    if period == "second":
+async def get_download_files(ticker: str, interval: str = "1S"):
+    if not validate_resample_rule(interval):
+        return {"error": f"Unsupported interval: {interval}"}
+    
+    interval_seconds = resample_rule_to_seconds(interval)
+    
+    if interval_seconds < 60:
         # For seconds, return yearly files
         bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
         if not os.path.exists(bars_dir):
             return {"error": "Bars data not found for this ticker"}
         parquet_files = sorted([f for f in os.listdir(bars_dir) if f.endswith('.parquet')])
         return {"files": parquet_files}
-    elif period in ["minute", "hour", "day", "week"]:
+    else:
         # For minute+ periods, return a single aggregated file option
-        # Check if we have minute data available
         bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1minute')
         file_path = os.path.join(bars_dir, f"{ticker}.parquet")
         if not os.path.exists(file_path):
@@ -245,63 +268,57 @@ async def get_download_files(ticker: str, period: str = "second", multiplier: in
             seconds_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
             if not os.path.exists(seconds_dir):
                 return {"error": "No data found for this ticker"}
-            # The aggregate_bars function will be called when downloading
+        
         # Generate a virtual filename for the aggregated data
-        period_suffix = f"_{multiplier}{period[0]}" if multiplier > 1 else f"_{period}"
-        virtual_filename = f"{ticker}{period_suffix}.parquet"
+        virtual_filename = f"{ticker}_{interval}.parquet"
         return {"files": [virtual_filename]}
-    else:
-        return {"error": f"Unsupported period: {period}"}
 
 @app.get("/api/download/file/{ticker}/{filename}")
-async def download_file(ticker: str, filename: str, format: str = "parquet", time_format: str = None, period: str = "second", multiplier: int = 1):
+async def download_file(ticker: str, filename: str, format: str = "parquet", time_format: str = None, interval: str = "1S"):
     try:
-        if period not in ["second", "minute", "hour", "day", "week"]:
-            return {"error": f"Unsupported period: {period}"}
+        if not validate_resample_rule(interval):
+            return {"error": f"Unsupported interval: {interval}"}
         if format not in ["parquet", "csv"]:
             return {"error": f"Unsupported format: {format}"}
-        if multiplier < 1 or not isinstance(multiplier, int) or multiplier > 10080:
-            return {"error": "Multiplier is not valid"}
         # check that ticker is alphanumeric or dots, dashes, underscores
         if not ticker.replace('.', '').replace('-', '').replace('_', '').isalnum():
             return {"error": "Ticker is not valid"}
-        if period == "second":
+        
+        interval_seconds = resample_rule_to_seconds(interval)
+        
+        # load file
+        if interval_seconds < 60:
             # get year from filename
             year = filename.split('.')[0].split('_')[-1]
             # check that 'year' is an int between 2003 and 2050
             if not year.isdigit() or not (2003 <= int(year) <= 2050):
                 return {"error": "Year is not valid"}
-        # load file
-        if period == "second":
             bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
             file_path = os.path.join(bars_dir, f"{year}.parquet")
         else:
             bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1minute')
             file_path = os.path.join(bars_dir, f"{ticker}.parquet")
+        
         if not os.path.exists(file_path):
             return {"error": "File not found"}
         df = pd.read_parquet(file_path)
-        # aggegate
-        if period == "second":
-            if multiplier > 1:
-                df = aggregate_ohlc_data(df, multiplier)
+        
+        # aggregate
+        if interval_seconds < 60:
+            if interval != "1S":
+                df = aggregate_ohlc_data(df, interval)
         else:
             df.reset_index(inplace=True)
             df.rename(columns={df.columns[0]: 'timestamp'}, inplace=True)
-            period_to_minutes = {
-                "minute": 1,
-                "hour": 60,
-                "day": 1440,
-                "week": 10080
-            }
-            total_minutes = period_to_minutes[period] * multiplier
-            if total_minutes > 1:
-                df = aggregate_ohlc_data(df, total_minutes * 60)
+            if interval != "1M":
+                df = aggregate_ohlc_data(df, interval)
+        
         # return the file
-        if period == "second":
-            result_filename = f"{ticker}_{multiplier}{period}_{year}.{format}"
+        if interval_seconds < 60:
+            result_filename = f"{ticker}_{interval}_{year}.{format}"
         else:
-            result_filename = f"{ticker}_{multiplier}{period}.{format}"
+            result_filename = f"{ticker}_{interval}.{format}"
+            
         if format == "parquet":
             output = io.BytesIO()
             table = pa.table(df)

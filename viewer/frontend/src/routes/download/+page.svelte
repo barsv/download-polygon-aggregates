@@ -10,24 +10,16 @@
   let selectedFormat = $state('parquet');
   let timeFormat = $state('timestamp');
   let customTimeFormat = $state('yyyy-MM-dd HH:mm:ss');
-  let selectedPeriod = $state('1second');
-
-  function parsePeriod(periodStr: string) {
-    const match = periodStr.match(/^(\d+)(\w+)$/);
-    return {
-      multiplier: match ? parseInt(match[1]) : 1,
-      period: match ? match[2] : 'second'
-    };
-  }
+  let selectedInterval = $state('1S');
 
   onMount(async () => {
     // Get ticker from URL params
     ticker = $page.url.searchParams.get('ticker') || '';
     
-    // Get period from URL params (passed from main chart page)
-    const urlPeriod = $page.url.searchParams.get('period');
-    if (urlPeriod) {
-      selectedPeriod = urlPeriod;
+    // Get interval from URL params (passed from main chart page)
+    const urlInterval = $page.url.searchParams.get('interval');
+    if (urlInterval) {
+      selectedInterval = urlInterval;
     }
 
     if (!ticker) {
@@ -46,12 +38,9 @@
     error = null;
     
     try {
-      const { multiplier, period } = parsePeriod(selectedPeriod);
-      
       const params = new URLSearchParams();
-      if (period !== 'second' || multiplier !== 1) {
-        params.append('period', period);
-        params.append('multiplier', multiplier.toString());
+      if (selectedInterval !== '1S') {
+        params.append('interval', selectedInterval);
       }
       
       let url = `/api/download/files/${ticker}`;
@@ -80,18 +69,16 @@
     loadFiles();
   }
 
-  function handlePeriodChange() {
+  function handleIntervalChange() {
     loadFiles();
   }
 
   function downloadFile(filename: string) {
-    const { multiplier, period } = parsePeriod(selectedPeriod);
-    
     let url = `/api/download/file/${ticker}/${filename}?format=${selectedFormat}`;
     
-    // Add period parameters if not default
-    if (period !== 'second' || multiplier !== 1) {
-      url += `&period=${period}&multiplier=${multiplier}`;
+    // Add interval parameter if not default
+    if (selectedInterval !== '1S') {
+      url += `&interval=${selectedInterval}`;
     }
     
     // Add time format parameters for CSV
@@ -127,24 +114,21 @@
       </select>
     </div>
     
-    <!-- Period selection -->
-    <div class="period-section">
-      <label for="period-select">Period:</label>
-      <select id="period-select" bind:value={selectedPeriod} onchange={handlePeriodChange}>
-        <option value="1second">1 Second</option>
-        <option value="5second">5 Seconds</option>
-        <option value="10second">10 Seconds</option>
-        <option value="15second">15 Seconds</option>
-        <option value="30second">30 Seconds</option>
-        <option value="1minute">1 Minute</option>
-        <option value="5minute">5 Minutes</option>
-        <option value="15minute">15 Minutes</option>
-        <option value="30minute">30 Minutes</option>
-        <option value="60minute">1 Hour</option>
-        <option value="240minute">4 Hours</option>
-        <option value="720minute">12 Hours</option>
-        <option value="1440minute">1 Day</option>
-        <option value="10080minute">1 Week</option>
+    <!-- Interval selection -->
+    <div class="interval-section">
+      <label for="interval">Interval:</label>
+      <select id="interval" bind:value={selectedInterval} onchange={handleIntervalChange}>
+        <option value="1S">1 second</option>
+        <option value="5S">5 seconds</option>
+        <option value="10S">10 seconds</option>
+        <option value="30S">30 seconds</option>
+        <option value="1T">1 minute</option>
+        <option value="5T">5 minutes</option>
+        <option value="15T">15 minutes</option>
+        <option value="30T">30 minutes</option>
+        <option value="1H">1 hour</option>
+        <option value="4H">4 hours</option>
+        <option value="1D">1 day</option>
       </select>
     </div>
     
@@ -232,19 +216,19 @@
   }
 
   .format-section label,
-  .period-section label {
+  .interval-section label {
     display: block;
     margin-bottom: 5px;
     font-weight: bold;
   }
 
   .format-section select,
-  .period-section select {
+  .interval-section select {
     padding: 8px;
     font-size: 14px;
   }
 
-  .period-section {
+  .interval-section {
     margin-bottom: 15px;
   }
 
