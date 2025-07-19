@@ -255,76 +255,73 @@ async def get_download_files(ticker: str, period: str = "second", multiplier: in
 
 @app.get("/api/download/file/{ticker}/{filename}")
 async def download_file(ticker: str, filename: str, format: str = "parquet", time_format: str = None, period: str = "second", multiplier: int = 1):
-    if period not in ["second", "minute", "hour", "day", "week"]:
-        return {"error": f"Unsupported period: {period}"}
-    if format not in ["parquet", "csv"]:
-        return {"error": f"Unsupported format: {format}"}
-    if multiplier < 1 or not isinstance(multiplier, int) or multiplier > 10080:
-        return {"error": "Multiplier is not valid"}
-    # check that ticker is alphanumeric or dots, dashes, underscores
-    if not ticker.replace('.', '').replace('-', '').replace('_', '').isalnum():
-        return {"error": "Ticker is not valid"}
-    if period == "second":
-        # get year from filename
-        year = filename.split('.')[0].split('_')[-1]
-        # check that 'year' is an int between 2003 and 2050
-        if not year.isdigit() or not (2003 <= int(year) <= 2050):
-            return {"error": "Year is not valid"}
-    # load file
-    if period == "second":
-        bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
-        file_path = os.path.join(bars_dir, f"{year}.parquet")
-    else:
-        bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1minute')
-        file_path = os.path.join(bars_dir, f"{ticker}.parquet")
-    if not os.path.exists(file_path):
-        return {"error": "File not found"}
-    df = pd.read_parquet(file_path)
-    # aggegate
-    if period == "second":
-        if multiplier > 1:
-            df = aggregate_ohlc_data(df, multiplier)
-    else:
-        period_to_minutes = {
-            "minute": 1,
-            "hour": 60,
-            "day": 1440,
-            "week": 10080
-        }
-        total_minutes = period_to_minutes[period] * multiplier
-        if total_minutes > 1:
-            df.reset_index(inplace=True)
-            df.rename(columns={df.columns[0]: 'timestamp'}, inplace=True)
-            df = aggregate_ohlc_data(df, total_minutes * 60)
+    try:
+        if period not in ["second", "minute", "hour", "day", "week"]:
+            return {"error": f"Unsupported period: {period}"}
+        if format not in ["parquet", "csv"]:
+            return {"error": f"Unsupported format: {format}"}
+        if multiplier < 1 or not isinstance(multiplier, int) or multiplier > 10080:
+            return {"error": "Multiplier is not valid"}
+        # check that ticker is alphanumeric or dots, dashes, underscores
+        if not ticker.replace('.', '').replace('-', '').replace('_', '').isalnum():
+            return {"error": "Ticker is not valid"}
+        if period == "second":
+            # get year from filename
+            year = filename.split('.')[0].split('_')[-1]
+            # check that 'year' is an int between 2003 and 2050
+            if not year.isdigit() or not (2003 <= int(year) <= 2050):
+                return {"error": "Year is not valid"}
+        # load file
+        if period == "second":
+            bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
+            file_path = os.path.join(bars_dir, f"{year}.parquet")
         else:
-            df.reset_index(inplace=True)
-            df.rename(columns={df.columns[0]: 'timestamp'}, inplace=True)
-    # return the file
-    if period == "second":
-        result_filename = f"{ticker}_{multiplier}{period}_{year}.{format}"
-    else:
-        result_filename = f"{ticker}_{multiplier}{period}.{format}"
-    if format == "parquet":
-        output = io.BytesIO()
-        table = pa.table(df)
-        pq.write_table(table, output)
-        output.seek(0)
-        return StreamingResponse(output, media_type="application/octet-stream", headers={'Content-Disposition': f'attachment; filename="{result_filename}"'})
-    elif format == "csv":
-        try:
+            bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1minute')
+            file_path = os.path.join(bars_dir, f"{ticker}.parquet")
+        if not os.path.exists(file_path):
+            return {"error": "File not found"}
+        df = pd.read_parquet(file_path)
+        # aggegate
+        if period == "second":
+            if multiplier > 1:
+                df = aggregate_ohlc_data(df, multiplier)
+        else:
+            period_to_minutes = {
+                "minute": 1,
+                "hour": 60,
+                "day": 1440,
+                "week": 10080
+            }
+            total_minutes = period_to_minutes[period] * multiplier
+            if total_minutes > 1:
+                df.reset_index(inplace=True)
+                df.rename(columns={df.columns[0]: 'timestamp'}, inplace=True)
+                df = aggregate_ohlc_data(df, total_minutes * 60)
+            else:
+                df.reset_index(inplace=True)
+                df.rename(columns={df.columns[0]: 'timestamp'}, inplace=True)
+        # return the file
+        if period == "second":
+            result_filename = f"{ticker}_{multiplier}{period}_{year}.{format}"
+        else:
+            result_filename = f"{ticker}_{multiplier}{period}.{format}"
+        if format == "parquet":
+            output = io.BytesIO()
+            table = pa.table(df)
+            pq.write_table(table, output)
+            output.seek(0)
+            return StreamingResponse(output, media_type="application/octet-stream", headers={'Content-Disposition': f'attachment; filename="{result_filename}"'})
+        elif format == "csv":
             if time_format and time_format != 'timestamp':
-                try:
-                    # Convert Python datetime format to pandas format
-                    pandas_format = time_format.replace('yyyy', '%Y').replace('MM', '%m').replace('dd', '%d').replace('HH', '%H').replace('mm', '%M').replace('ss', '%S').replace('fff', '%f')
-                    # Convert timestamp to datetime and format
-                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s').dt.strftime(pandas_format)
-                except Exception as e:
-                    return {"error": f"Failed to format time to {time_format} ({pandas_format}): {e}"}
+                # Convert Python datetime format to pandas format
+                pandas_format = time_format.replace('yyyy', '%Y').replace('MM', '%m').replace('dd', '%d').replace('HH', '%H').replace('mm', '%M').replace('ss', '%S').replace('fff', '%f')
+                # Convert timestamp to datetime and format
+                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s').dt.strftime(pandas_format)
             output = io.StringIO()
             df.to_csv(output, index=False)
             output.seek(0)
             return StreamingResponse(io.BytesIO(output.getvalue().encode('utf-8')), media_type="text/csv", headers={'Content-Disposition': f'attachment; filename="{result_filename}"'})
-        except Exception as e:
-            return {"error": f"Error converting to CSV: {e}"}
-    else:
-        return {"error": "Unsupported format"}
+        else:
+            return {"error": "Unsupported format"}
+    except Exception as e:
+        return {"error": f"Download failed: {str(e)}"}
