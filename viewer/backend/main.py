@@ -286,6 +286,8 @@ async def download_file(ticker: str, filename: str, format: str = "parquet", tim
             if multiplier > 1:
                 df = aggregate_ohlc_data(df, multiplier)
         else:
+            df.reset_index(inplace=True)
+            df.rename(columns={df.columns[0]: 'timestamp'}, inplace=True)
             period_to_minutes = {
                 "minute": 1,
                 "hour": 60,
@@ -294,12 +296,7 @@ async def download_file(ticker: str, filename: str, format: str = "parquet", tim
             }
             total_minutes = period_to_minutes[period] * multiplier
             if total_minutes > 1:
-                df.reset_index(inplace=True)
-                df.rename(columns={df.columns[0]: 'timestamp'}, inplace=True)
                 df = aggregate_ohlc_data(df, total_minutes * 60)
-            else:
-                df.reset_index(inplace=True)
-                df.rename(columns={df.columns[0]: 'timestamp'}, inplace=True)
         # return the file
         if period == "second":
             result_filename = f"{ticker}_{multiplier}{period}_{year}.{format}"
