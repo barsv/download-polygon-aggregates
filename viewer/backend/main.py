@@ -98,8 +98,8 @@ def load_ticker_details():
         print(f"Error reading ticker details file: {e}")
         return None
 
-def _get_aggregated_minutes_df(ticker: str, minutes: int, timestamp: int = None, direction: str = "both") -> pd.DataFrame:
-    """Load minute bars and aggregate to specified minute interval on-the-fly."""
+def _get_aggregated_minutes_df(ticker: str, interval: str, timestamp: int = None, direction: str = "both") -> pd.DataFrame:
+    """Load minute bars and aggregate to specified interval on-the-fly."""
     bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1minute')
     file_path = os.path.join(bars_dir, f"{ticker}.parquet")
     if not os.path.exists(file_path):
@@ -107,11 +107,14 @@ def _get_aggregated_minutes_df(ticker: str, minutes: int, timestamp: int = None,
         if not os.path.exists(file_path):
             return None
     required_columns = ['timestamp', 'open', 'high', 'low', 'close']
-    # Use PyArrow for faster разработкаreading
+    # Use PyArrow for faster reading
     table = pq.read_table(file_path, columns=required_columns)
     df = table.to_pandas()
-    # Pre-filter minute data to reduce processing
-    minute_limit = LIMIT * minutes
+    
+    # Calculate limit based on interval
+    interval_minutes = resample_rule_to_seconds(interval) // 60
+    minute_limit = LIMIT * interval_minutes
+    
     if timestamp is not None:
         try:
             pos = df.index.get_loc(timestamp)
@@ -131,12 +134,12 @@ def _get_aggregated_minutes_df(ticker: str, minutes: int, timestamp: int = None,
             df = df.iloc[start_pos:end_pos]
     else:
         df = df.tail(minute_limit)
-    # If minutes == 1, skip resampling (already 1-minute data)
-    if minutes == 1:
+    # If interval is 1M, skip resampling (already 1-minute data)
+    if interval == '1M':
         df_result = df
     else:
-        # Use universal aggregation function
-        df_result = aggregate_ohlc_data(df, f'{minutes}M')  # M for minutes in pandas
+        # Use universal aggregation function with original interval
+        df_result = aggregate_ohlc_data(df, interval)
     # when we request forward data we pass the timestamp of the last visible bar, 
     # hence we need to drop the first bar because it already exists on the chart.
     if direction == "forward":
@@ -146,8 +149,8 @@ def _get_aggregated_minutes_df(ticker: str, minutes: int, timestamp: int = None,
     df_result.rename(columns={df_result.columns[0]: 'time'}, inplace=True)
     return df_result
 
-def _get_aggregated_seconds_df(ticker: str, seconds: int, timestamp: int = None, direction: str = "both") -> pd.DataFrame:
-    """Load second bars and aggregate to specified second interval on-the-fly."""
+def _get_aggregated_seconds_df(ticker: str, interval: str, timestamp: int = None, direction: str = "both") -> pd.DataFrame:
+    """Load second bars and aggregate to specified interval on-the-fly."""
     bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
     if not os.path.exists(bars_dir):
         return None
@@ -172,8 +175,11 @@ def _get_aggregated_seconds_df(ticker: str, seconds: int, timestamp: int = None,
         return None
     required_columns = ['timestamp', 'open', 'high', 'low', 'close']
     df = pd.concat([pd.read_parquet(f, columns=required_columns) for f in files_to_read], ignore_index=True)
-    # Pre-filter second data to reduce processing
-    second_limit = LIMIT * seconds
+    
+    # Calculate limit based on interval
+    interval_seconds = resample_rule_to_seconds(interval)
+    second_limit = LIMIT * interval_seconds
+    
     if timestamp is not None:
         if direction == "backward":
             idx = df['timestamp'].searchsorted(timestamp, side='right')
@@ -189,12 +195,12 @@ def _get_aggregated_seconds_df(ticker: str, seconds: int, timestamp: int = None,
             df = df.iloc[start_idx:end_idx]
     else:
         df = df.tail(second_limit)
-    # If seconds == 1, skip resampling (already 1-second data)
-    if seconds == 1:
+    # If interval is 1S, skip resampling (already 1-second data)
+    if interval == '1S':
         df_result = df
     else:
-        # Use universal aggregation function
-        df_result = aggregate_ohlc_data(df, f'{seconds}S')
+        # Use universal aggregation function with original interval
+        df_result = aggregate_ohlc_data(df, interval)
     # when we request forward data we pass the timestamp of the last visible bar, 
     # hence we need to drop the first bar because it already exists on the chart.
     if direction == "forward":
@@ -236,11 +242,10 @@ async def get_bars(ticker: str, timestamp: int = None, direction = "", interval:
     
     if interval_seconds < 60:
         # Use seconds data
-        df = _get_aggregated_seconds_df(ticker, interval_seconds, timestamp, direction)
+        df = _get_aggregated_seconds_df(ticker, interval, timestamp, direction)
     else:
         # Use minutes data
-        interval_minutes = interval_seconds // 60
-        df = _get_aggregated_minutes_df(ticker, interval_minutes, timestamp, direction)
+        df = _get_aggregated_minutes_df(ticker, interval, timestamp, direction)
     
     result = {"ticker": ticker, "bars": df.to_dict(orient='records')}
     return result
