@@ -40,12 +40,12 @@ async def get_tickers(search: str = None):
     return {"tickers": filtered_tickers[:20]}
 
 @app.get("/api/bars/{ticker}")
-async def get_bars(ticker: str, timestamp: int = None, direction = "", interval: str = "1S"):
+async def get_bars(ticker: str, timestamp: int = None, direction = "", interval: str = "1s"):
     """
     Get bars for a ticker with specified interval.
     
     Args:
-        interval: Resample rule (e.g., '1S', '5S', '1M', '5M', '1H', '4H', '1D', '1W')
+        interval: Resample rule (e.g., '1s', '5s', '1min', '5min', '1h', '4h', '1d', '1w')
     """
     if not validate_resample_rule(interval):
         return {"error": f"Unsupported interval: {interval}"}
@@ -66,7 +66,7 @@ async def get_bars(ticker: str, timestamp: int = None, direction = "", interval:
     return result
 
 @app.get("/api/download/files/{ticker}")
-async def get_download_files(ticker: str, interval: str = "1S"):
+async def get_download_files(ticker: str, interval: str = "1s"):
     if not validate_resample_rule(interval):
         return {"error": f"Unsupported interval: {interval}"}
     
@@ -94,7 +94,7 @@ async def get_download_files(ticker: str, interval: str = "1S"):
         return {"files": [virtual_filename]}
 
 @app.get("/api/download/file/{ticker}/{filename}")
-async def download_file(ticker: str, filename: str, format: str = "parquet", time_format: str = None, interval: str = "1S"):
+async def download_file(ticker: str, filename: str, format: str = "parquet", time_format: str = None, interval: str = "1s"):
     try:
         if not validate_resample_rule(interval):
             return {"error": f"Unsupported interval: {interval}"}
@@ -125,12 +125,12 @@ async def download_file(ticker: str, filename: str, format: str = "parquet", tim
         
         # aggregate
         if interval_seconds < 60:
-            if interval != "1S":
+            if interval != "1s":
                 df = aggregate_ohlc_data(df, interval)
         else:
             df.reset_index(inplace=True)
             df.rename(columns={df.columns[0]: 'timestamp'}, inplace=True)
-            if interval != "1M":
+            if interval != "1min":
                 df = aggregate_ohlc_data(df, interval)
         
         # return the file

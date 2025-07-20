@@ -17,7 +17,7 @@ BARS_RETURN_LIIMIT = 3000
 def resample_rule_to_seconds(rule: str) -> int:
     """Convert pandas resample rule to seconds."""
     import re
-    match = re.match(r'^(\d+)([SMHDW])$', rule.upper())
+    match = re.match(r'^(\d+)(s|min|h|d|w)$', rule.lower())
     if not match:
         raise ValueError(f"Invalid resample rule: {rule}")
     
@@ -25,22 +25,21 @@ def resample_rule_to_seconds(rule: str) -> int:
     number = int(number)
     
     multipliers = {
-        'S': 1,           # seconds
-        'M': 60,          # minutes  
-        'H': 3600,        # hours
-        'D': 86400,       # days
-        'W': 604800       # weeks
+        's': 1,           # seconds
+        'min': 60,        # minutes  
+        'h': 3600,        # hours
+        'd': 86400,       # days
+        'w': 604800       # weeks
     }
-    
     return number * multipliers[unit]
 
 def validate_resample_rule(rule: str) -> bool:
     """Validate if resample rule is allowed."""
     allowed_rules = [
-        '1S', '5S', '10S', '15S', '30S',
-        '1M', '5M', '15M', '30M', 
-        '1H', '4H', '12H',
-        '1D', '1W'
+        '1s', '5s', '10s', '15s', '30s',
+        '1min', '5min', '15min', '30min', 
+        '1h', '4h', '12h',
+        '1d', '1w'
     ]
     return rule in allowed_rules
 
@@ -50,12 +49,12 @@ def aggregate_ohlc_data(df: pd.DataFrame, resample_rule: str) -> pd.DataFrame:
     
     Args:
         df: DataFrame with OHLC data and timestamp index OR timestamp column
-        resample_rule: Pandas resample rule (e.g., '5S', '1M', '4H', '1D')
+        resample_rule: Pandas resample rule (e.g., '5s', '1min', '4h', '1d')
     
     Returns:
         Aggregated DataFrame with timestamp index
     """
-    if resample_rule == '1S':
+    if resample_rule == '1s':
         return df  # No aggregation needed for 1 second
     
     # --- create index on timestamp ---
@@ -137,9 +136,10 @@ def get_aggregated_minutes_df(ticker: str, interval: str, timestamp: int = None,
             df = df.iloc[start_pos:end_pos]
     else:
         df = df.tail(minute_limit)
-    # If interval is 1M, skip resampling (already 1-minute data)
-    if interval == '1M':
+    # If interval is 1min, skip resampling (already 1-minute data)
+    if interval == '1min':
         df_result = df
+        df_result = df_result.reset_index()
     else:
         # Use universal aggregation function with original interval
         df_result = aggregate_ohlc_data(df, interval)
@@ -187,7 +187,7 @@ def get_aggregated_seconds_df(ticker: str, interval: str, timestamp: int = None,
             end_idx = min(len(df), idx + second_limit // 2)
             df = df.iloc[start_idx:end_idx]
     # resample
-    if interval == '1S':
+    if interval == '1s':
         # skip resampling (already 1-second data)
         df_result = df
     else:

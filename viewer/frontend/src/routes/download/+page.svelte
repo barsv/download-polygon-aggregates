@@ -10,7 +10,7 @@
   let selectedFormat = $state('parquet');
   let timeFormat = $state('timestamp');
   let customTimeFormat = $state('yyyy-MM-dd HH:mm:ss');
-  let selectedInterval = $state('1S');
+  let selectedInterval = $state('1s');
 
   onMount(async () => {
     // Get ticker from URL params
@@ -39,7 +39,7 @@
     
     try {
       const params = new URLSearchParams();
-      if (selectedInterval !== '1S') {
+      if (selectedInterval !== '1s') {
         params.append('interval', selectedInterval);
       }
       
@@ -77,7 +77,7 @@
     let url = `/api/download/file/${ticker}/${filename}?format=${selectedFormat}`;
     
     // Add interval parameter if not default
-    if (selectedInterval !== '1S') {
+    if (selectedInterval !== '1s') {
       url += `&interval=${selectedInterval}`;
     }
     
@@ -118,17 +118,17 @@
     <div class="interval-section">
       <label for="interval">Interval:</label>
       <select id="interval" bind:value={selectedInterval} onchange={handleIntervalChange}>
-        <option value="1S">1 second</option>
-        <option value="5S">5 seconds</option>
-        <option value="10S">10 seconds</option>
-        <option value="30S">30 seconds</option>
-        <option value="1T">1 minute</option>
-        <option value="5T">5 minutes</option>
-        <option value="15T">15 minutes</option>
-        <option value="30T">30 minutes</option>
-        <option value="1H">1 hour</option>
-        <option value="4H">4 hours</option>
-        <option value="1D">1 day</option>
+        <option value="1s">1 second</option>
+        <option value="5s">5 seconds</option>
+        <option value="10s">10 seconds</option>
+        <option value="30s">30 seconds</option>
+        <option value="1min">1 minute</option>
+        <option value="5min">5 minutes</option>
+        <option value="15min">15 minutes</option>
+        <option value="30min">30 minutes</option>
+        <option value="1h">1 hour</option>
+        <option value="4h">4 hours</option>
+        <option value="1d">1 day</option>
       </select>
     </div>
     

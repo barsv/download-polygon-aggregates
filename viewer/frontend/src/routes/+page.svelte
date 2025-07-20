@@ -12,7 +12,7 @@
   let visibleRangeChanging = $state(false);
   let error = $state<string | null>(null);
   let allBars = $state<any[]>([]);
-  let interval = $state('1S');
+  let interval = $state('1s');
   let noMoreBackward = $state(false);
   let noMoreForward = $state(false);
 
@@ -256,20 +256,20 @@
     <div class="left-controls">
       <TickerSearch value={selectedTicker} onchange={handleTickerChange} />
       <select bind:value={interval} onchange={onTickerChange}>
-        <option value="1S">1 Second</option>
-        <option value="5S">5 Seconds</option>
-        <option value="10S">10 Seconds</option>
-        <option value="15S">15 Seconds</option>
-        <option value="30S">30 Seconds</option>
-        <option value="1M">1 Minute</option>
-        <option value="5M">5 Minutes</option>
-        <option value="15M">15 Minutes</option>
-        <option value="30M">30 Minutes</option>
-        <option value="1H">1 Hour</option>
-        <option value="4H">4 Hours</option>
-        <option value="12H">12 Hours</option>
-        <option value="1D">1 Day</option>
-        <option value="1W">1 Week</option>
+        <option value="1s">1 Second</option>
+        <option value="5s">5 Seconds</option>
+        <option value="10s">10 Seconds</option>
+        <option value="15s">15 Seconds</option>
+        <option value="30s">30 Seconds</option>
+        <option value="1min">1 Minute</option>
+        <option value="5min">5 Minutes</option>
+        <option value="15min">15 Minutes</option>
+        <option value="30min">30 Minutes</option>
+        <option value="1h">1 Hour</option>
+        <option value="4h">4 Hours</option>
+        <option value="12h">12 Hours</option>
+        <option value="1d">1 Day</option>
+        <option value="1w">1 Week</option>
       </select>
       {#if loading}
         <div class="status-indicator">Loading...</div>
