@@ -3,6 +3,7 @@ import sys
 import pandas as pd
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from datetime import datetime
 import io
 import pyarrow.parquet as pq
@@ -14,12 +15,15 @@ import main_service
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import settings
-from download_all_bars import load_ticker_details
+from load_ticker_details import load_ticker_details
 
 app = FastAPI()
 
 ticker_details_df = None
 sorted_tickers = None
+
+# Check if built frontend exists and mount it AFTER API routes are defined
+frontend_build_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "build")
 
 @app.get("/api/tickers")
 async def get_tickers(search: str = None):
@@ -58,6 +62,10 @@ async def get_bars(ticker: str, timestamp: int = None, direction = "", interval:
     else:
         # Use minutes data
         df = main_service.get_aggregated_minutes_df(ticker, interval, timestamp, direction)
+    
+    # Check if data was found
+    if df is None:
+        return {"error": f"No data found for ticker {ticker}"}
     
     # Rename timestamp column to time for lightweight-charts.js
     df.rename(columns={'timestamp': 'time'}, inplace=True)
@@ -166,3 +174,12 @@ async def download_file(ticker: str, filename: str, format: str = "parquet", tim
             return {"error": "Unsupported format"}
     except Exception as e:
         return {"error": f"Download failed: {str(e)}"}
+
+# Mount static files AFTER all API routes are defined
+if os.path.exists(frontend_build_path):
+    # Mount the built SvelteKit app
+    app.mount("/", StaticFiles(directory=frontend_build_path, html=True), name="frontend")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

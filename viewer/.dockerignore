@@ -1,0 +1,23 @@
+# Polygon.io Data Viewer - Docker Files
+Dockerfile
+docker-compose.yml
+docker-entrypoint.sh
+nginx.conf
+
+# Data directory (should be mounted as volume)
+polygon-data/
+
+# Logs
+*.log
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
