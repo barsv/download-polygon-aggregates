@@ -12,7 +12,7 @@
   let visibleRangeChanging = $state(false);
   let error = $state<string | null>(null);
   let allBars = $state<any[]>([]);
-  let interval = $state('1s');
+  let interval = $state('10s');
   let noMoreBackward = $state(false);
   let noMoreForward = $state(false);
 
@@ -62,7 +62,6 @@
       // try/finally to restore the flag
       try {
         const barsInfo = newVisibleLogicalRange ? candlestickSeries?.barsInLogicalRange(newVisibleLogicalRange) : null;
-
         if (barsInfo && barsInfo.barsBefore < 50) {
           const oldestBar = allBars[0];
           if (oldestBar) {
@@ -76,10 +75,11 @@
             const timestamp = newestBar.time;
             await loadChartData(selectedTicker, timestamp, "forward");
           }
-        }        } catch (e: any) {
-          console.error('Error during visible range change:', e);
-          error = e.message || 'An error occurred while updating the visible range.';
-        } finally {
+        }
+      } catch (e: any) {
+        console.error('Error during visible range change:', e);
+        error = e.message || 'An error occurred while updating the visible range.';
+      } finally {
         // dirty hack is needed because after setData the visible range gets updated not immediately. don't know why.
         // without timeout it loads data twice while scrolling.
         setTimeout(() => {
@@ -185,10 +185,15 @@
     
     // Try to get current visible time range before clearing data
     let centerTimestamp = null;
+    let visibleBars = 0;
     try {
-      const visibleLogicalRange = chart.timeScale().getVisibleRange();
+      const visibleRange = chart.timeScale().getVisibleRange();
+      if (visibleRange) {
+        centerTimestamp = Math.floor((visibleRange.from as number) + ((visibleRange.to as number) - (visibleRange.from as number)) / 2);
+      }
+      const visibleLogicalRange = chart.timeScale().getVisibleLogicalRange();
       if (visibleLogicalRange) {
-        centerTimestamp = Math.floor((visibleLogicalRange.from as number) + ((visibleLogicalRange.to as number) - (visibleLogicalRange.from as number)) / 2);
+        visibleBars = visibleLogicalRange.to - visibleLogicalRange.from;
       }
     } catch (e) {
       console.warn('Could not get visible range:', e);
@@ -199,8 +204,12 @@
     // Load data around the center timestamp, or latest if no center found
     await loadChartData(selectedTicker, centerTimestamp, "both");
     
+    if (allBars.length === 0) {
+      return;
+    }
+    const visibleBarsHalf = visibleBars ? Math.floor(visibleBars / 2) : 500;
     // After loading data, center the chart on the timestamp if we have it
-    if (centerTimestamp && allBars.length > 0) {
+    if (centerTimestamp) {
       try {
         // Find the position of centerTimestamp in allBars
         let centerIndex = -1;
@@ -215,10 +224,8 @@
         if (centerIndex === -1) {
           centerIndex = allBars.length - 1;
         }
-        
-        // Calculate window: ±500 bars from center
-        const startIndex = Math.max(0, centerIndex - 500);
-        const endIndex = Math.min(allBars.length - 1, centerIndex + 500);
+        const startIndex = Math.max(0, centerIndex - visibleBarsHalf);
+        const endIndex = Math.min(allBars.length - 1, centerIndex + visibleBarsHalf);
         
         const fromTime = allBars[startIndex].time;
         const toTime = allBars[endIndex].time;
@@ -231,6 +238,33 @@
         }
       } catch (e) {
         console.warn('Could not set visible range:', e);
+      }
+    }
+    else {
+      // on first page load show last 1000 bars and add space on the right for 50 future bars
+      try {
+        const totalBars = allBars.length;
+        const barsToShow = Math.min(1000, totalBars);
+        const startIndex = Math.max(0, totalBars - barsToShow);
+        
+        if (totalBars > 0 && chart) {
+          const fromTime = allBars[startIndex].time;
+          const toTime = allBars[totalBars - 1].time;
+          
+          chart.timeScale().setVisibleRange({
+            from: fromTime,
+            to: toTime
+          });
+          
+          // Use scrollToPosition to position the chart with some space on the right
+          setTimeout(() => {
+            // Scroll to a position that leaves some space on the right
+            // Negative values scroll towards the end (more recent data)
+            chart?.timeScale().scrollToPosition(50, false);
+          }, 100);
+        }
+      } catch (e) {
+        console.warn('Could not set initial visible range:', e);
       }
     }
   }

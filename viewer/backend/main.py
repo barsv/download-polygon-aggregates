@@ -9,7 +9,7 @@ import pyarrow.parquet as pq
 import pyarrow as pa
 import pyarrow.dataset as ds
 
-from viewer.backend import main_service
+import main_service
 
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
