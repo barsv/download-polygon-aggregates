@@ -9,8 +9,7 @@ import pyarrow.parquet as pq
 import pyarrow as pa
 import pyarrow.dataset as ds
 
-from viewer.backend.utils2 import get_aggregated_minutes_df, get_aggregated_seconds_df, aggregate_ohlc_data, \
-    resample_rule_to_seconds, validate_resample_rule
+from viewer.backend import main_service
 
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -47,18 +46,18 @@ async def get_bars(ticker: str, timestamp: int = None, direction = "", interval:
     Args:
         interval: Resample rule (e.g., '1s', '5s', '1min', '5min', '1h', '4h', '1d', '1w')
     """
-    if not validate_resample_rule(interval):
+    if not main_service.validate_resample_rule(interval):
         return {"error": f"Unsupported interval: {interval}"}
     
     # Determine if we need seconds or minutes data
-    interval_seconds = resample_rule_to_seconds(interval)
+    interval_seconds = main_service.resample_rule_to_seconds(interval)
     
     if interval_seconds < 60:
         # Use seconds data
-        df = get_aggregated_seconds_df(ticker, interval, timestamp, direction)
+        df = main_service.get_aggregated_seconds_df(ticker, interval, timestamp, direction)
     else:
         # Use minutes data
-        df = get_aggregated_minutes_df(ticker, interval, timestamp, direction)
+        df = main_service.get_aggregated_minutes_df(ticker, interval, timestamp, direction)
     
     # Rename timestamp column to time for lightweight-charts.js
     df.rename(columns={'timestamp': 'time'}, inplace=True)
@@ -67,10 +66,10 @@ async def get_bars(ticker: str, timestamp: int = None, direction = "", interval:
 
 @app.get("/api/download/files/{ticker}")
 async def get_download_files(ticker: str, interval: str = "1s"):
-    if not validate_resample_rule(interval):
+    if not main_service.validate_resample_rule(interval):
         return {"error": f"Unsupported interval: {interval}"}
     
-    interval_seconds = resample_rule_to_seconds(interval)
+    interval_seconds = main_service.resample_rule_to_seconds(interval)
     
     if interval_seconds < 60:
         # For seconds, return yearly files
@@ -96,7 +95,7 @@ async def get_download_files(ticker: str, interval: str = "1s"):
 @app.get("/api/download/file/{ticker}/{filename}")
 async def download_file(ticker: str, filename: str, format: str = "parquet", time_format: str = None, interval: str = "1s"):
     try:
-        if not validate_resample_rule(interval):
+        if not main_service.validate_resample_rule(interval):
             return {"error": f"Unsupported interval: {interval}"}
         if format not in ["parquet", "csv"]:
             return {"error": f"Unsupported format: {format}"}
@@ -104,7 +103,7 @@ async def download_file(ticker: str, filename: str, format: str = "parquet", tim
         if not ticker.replace('.', '').replace('-', '').replace('_', '').isalnum():
             return {"error": "Ticker is not valid"}
         
-        interval_seconds = resample_rule_to_seconds(interval)
+        interval_seconds = main_service.resample_rule_to_seconds(interval)
         
         # load file
         if interval_seconds < 60:
@@ -126,12 +125,12 @@ async def download_file(ticker: str, filename: str, format: str = "parquet", tim
         # aggregate
         if interval_seconds < 60:
             if interval != "1s":
-                df = aggregate_ohlc_data(df, interval)
+                df = main_service.aggregate_ohlc_data(df, interval)
         else:
             df.reset_index(inplace=True)
             df.rename(columns={df.columns[0]: 'timestamp'}, inplace=True)
             if interval != "1min":
-                df = aggregate_ohlc_data(df, interval)
+                df = main_service.aggregate_ohlc_data(df, interval)
         
         # return the file
         if interval_seconds < 60:
