@@ -84,7 +84,7 @@ async def get_download_files(ticker: str, interval: str = "1s"):
         bars_dir = os.path.join(settings.ABSOLUTE_DATA_DIR, 'bars', '1second', ticker)
         if not os.path.exists(bars_dir):
             return {"error": "Bars data not found for this ticker"}
-        parquet_files = sorted([f for f in os.listdir(bars_dir) if f.endswith('.parquet')])
+        parquet_files = sorted([f.replace('.parquet', '') for f in os.listdir(bars_dir) if f.endswith('.parquet')])
         return {"files": parquet_files}
     else:
         # For minute+ periods, return a single aggregated file option
@@ -97,7 +97,7 @@ async def get_download_files(ticker: str, interval: str = "1s"):
                 return {"error": "No data found for this ticker"}
         
         # Generate a virtual filename for the aggregated data
-        virtual_filename = f"{ticker}_{interval}.parquet"
+        virtual_filename = f"{ticker}_{interval}"
         return {"files": [virtual_filename]}
 
 @app.get("/api/download/file/{ticker}/{filename}")
@@ -115,8 +115,7 @@ async def download_file(ticker: str, filename: str, format: str = "parquet", tim
         
         # load file
         if interval_seconds < 60:
-            # get year from filename
-            year = filename.split('.')[0].split('_')[-1]
+            year = filename
             # check that 'year' is an int between 2003 and 2050
             if not year.isdigit() or not (2003 <= int(year) <= 2050):
                 return {"error": "Year is not valid"}
