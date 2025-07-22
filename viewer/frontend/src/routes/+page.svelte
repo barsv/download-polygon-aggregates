@@ -13,6 +13,18 @@
   let error = $state<string | null>(null);
   let allBars = $state<any[]>([]);
   let interval = $state('10s');
+
+  // Update secondsVisible on chart when interval changes
+  function updateSecondsVisible() {
+    if (!chart) return;
+    // Show seconds on the time axis for second-based intervals
+    const secondIntervals = ['1s', '5s', '10s', '15s', '30s'];
+    const showSeconds = secondIntervals.includes(interval);
+    chart.timeScale().applyOptions({ secondsVisible: showSeconds });
+  }
+
+  // Svelte reactive block: update secondsVisible when interval changes
+  $effect(updateSecondsVisible);
   let noMoreBackward = $state(false);
   let noMoreForward = $state(false);
 
@@ -42,7 +54,7 @@
       timeScale: {
         borderColor: 'rgba(197, 203, 206, 0.8)',
         timeVisible: true,
-        secondsVisible: false,
+        secondsVisible: false, // initial value, will be updated reactively
       },
     });
 
