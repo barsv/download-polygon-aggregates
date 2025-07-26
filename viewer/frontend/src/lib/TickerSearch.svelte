@@ -94,7 +94,7 @@
   .ticker-search input {
     padding: 8px;
     font-size: 14px;
-    width: 200px;
+    width: 100px;
     border: 1px solid #ccc;
     border-radius: 4px;
   }

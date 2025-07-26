@@ -22,9 +22,6 @@ app = FastAPI()
 ticker_details_df = None
 sorted_tickers = None
 
-# Check if built frontend exists and mount it AFTER API routes are defined
-frontend_build_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "build")
-
 @app.get("/api/tickers")
 async def get_tickers(search: str = None):
     global ticker_details_df, sorted_tickers
@@ -173,11 +170,6 @@ async def download_file(ticker: str, filename: str, format: str = "parquet", tim
             return {"error": "Unsupported format"}
     except Exception as e:
         return {"error": f"Download failed: {str(e)}"}
-
-# Mount static files AFTER all API routes are defined
-if os.path.exists(frontend_build_path):
-    # Mount the built SvelteKit app
-    app.mount("/", StaticFiles(directory=frontend_build_path, html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn
