@@ -4,3 +4,8 @@ far from best bid/ask on a given exchange at the moment. such OTC deals will be 
 
 answer: ???
 
+q1: how many unique patterns?
+
+q2: if a is close to b and c, is c close to b?
+
+q3: how rmse is related to correlation?
