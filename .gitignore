@@ -6,3 +6,4 @@ api_key.txt
 api_key_id.txt
 tmp.txt
 **/__pycache__
+**/data
