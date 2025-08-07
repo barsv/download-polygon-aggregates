@@ -2,13 +2,11 @@ import os
 import sys
 import pandas as pd
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse
 from datetime import datetime
 import io
 import pyarrow.parquet as pq
 import pyarrow as pa
-import pyarrow.dataset as ds
 
 import main_service
 
