@@ -1,0 +1,2 @@
+formats = "ipynb,pyfiles//py:percent"
+hide_notebook_metadata = true
