@@ -48,3 +48,6 @@ fastapi==0.115.6
 wcwidth==0.2.13
 websockets==14.2
 jupytext==1.16.4
+requests==2.32.4
+tqdm==4.67.1
+scipy==1.14.1
