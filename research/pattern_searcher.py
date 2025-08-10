@@ -90,11 +90,7 @@ class PatternSearcher:
         # Denominator term (using precomputed denom_x)
         denom = np.sqrt(self.denom_x * denom_y)
 
-        # Handle potential division by zero in denom
-        r = np.zeros_like(num, dtype=np.float64)  # Initialize r with zeros
-        non_zero_denom_mask = denom > 1e-10  # Create a mask for non-zero denominators
-        # Calculate r only where denom is not zero
-        r[non_zero_denom_mask] = num[non_zero_denom_mask] / denom[non_zero_denom_mask]
+        r = num / denom
 
         return r
     
