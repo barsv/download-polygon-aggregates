@@ -11,7 +11,7 @@ import plotly.express as px
 import dash
 
 # Plotly-resampler imports (required)
-from plotly_resampler import FigureResampler, FigureWidgetResampler, register_plotly_resampler
+from plotly_resampler import FigureResampler
 from plotly_resampler.aggregation import MinMaxLTTB
 
 from research.data_downloader import get_filename
@@ -36,6 +36,10 @@ def make_equity(df_trades):
 
 params_options = sorted(trades["params_hash"].astype(str).unique().tolist())
 stoploss_options = sorted(trades["stop_loss"].unique().tolist())
+
+# Global resampler only used in 'line' mode; capped candles to keep UI responsive
+current_resampler = None
+MAX_CANDLES = 5000
 
 # ---------- App ----------
 app = Dash(__name__, suppress_callback_exceptions=True)
@@ -69,6 +73,18 @@ app.layout = html.Div(
                         {"label":"Long","value":"LONG"},
                         {"label":"Short","value":"SHORT"} ],
                     value="ALL", clearable=False
+                ),
+            ], style={"flex":"1"}),
+            html.Div([
+                html.Label("Mode:"),
+                dcc.RadioItems(
+                    id="mode",
+                    options=[
+                        {"label": "Line", "value": "line"},
+                        {"label": "Candles", "value": "candles"},
+                    ],
+                    value="line",
+                    inline=True,
                 ),
             ], style={"flex":"1"}),
         ], style={
@@ -110,7 +126,7 @@ app.layout = html.Div(
             style_table={"overflowX":"auto"},
             style_cell={"fontFamily":"monospace", "fontSize":"12px"},
         ),
-        dcc.Store(id="current_zoom"),
+    dcc.Store(id="current_zoom"),
     ]
 )
 
@@ -127,60 +143,52 @@ def filter_trades(params_hash, stop_loss, side):
         df = df[df["side"].str.lower()=="short"]
     return df.copy()
 
-def price_figure(bars_slice, trades_slice):
-    # Use FigureResampler for large datasets
-    fig = FigureResampler(
-        go.Figure(),
-        default_n_shown_samples=1000,  # Show max 1000 points initially
-        default_downsampler=MinMaxLTTB(parallel=True)  # Use efficient downsampling
-    )
-    
-    # For very large datasets, use close price as line chart
-    if len(bars_slice) > 10000:
-        fig.add_trace(
-            go.Scattergl(
-                x=bars_slice["timestamp"], 
-                y=bars_slice["close"],
-                mode="lines",
-                name="Close Price",
-                line=dict(width=1)
-            ),
-            hf_x=bars_slice["timestamp"],
-            hf_y=bars_slice["close"]
-        )
+def price_figure(bars_df, trades_df, mode="line"):
+    """Minimal figure builder: 'line' uses FigureResampler; 'candles' uses Candlestick."""
+    global current_resampler
+    if mode == "candles":
+        fig = go.Figure()
+        fig.add_trace(go.Candlestick(
+            x=bars_df["timestamp"], open=bars_df["open"], high=bars_df["high"],
+            low=bars_df["low"], close=bars_df["close"], name="Price", showlegend=False
+        ))
     else:
-        # For smaller datasets, use candlestick with resampling
-        fig.add_trace(
-            go.Candlestick(
-                x=bars_slice["timestamp"], 
-                open=bars_slice["open"],
-                high=bars_slice["high"], 
-                low=bars_slice["low"], 
-                close=bars_slice["close"],
-                name="Price", 
-                showlegend=False
-            )
+        fig = FigureResampler(
+            default_n_shown_samples=2000,
+            default_downsampler=MinMaxLTTB(parallel=True)
         )
-    
-    # Add trade markers (these are usually much fewer points)
-    if not trades_slice.empty:
+        current_resampler = fig
+        # Close, High, Low lines; all resampled
+        fig.add_trace(
+            go.Scattergl(mode="lines", name="Close", line=dict(width=1)),
+            hf_x=bars_df["timestamp"], hf_y=bars_df["close"]
+        )
+        fig.add_trace(
+            go.Scattergl(mode="lines", name="High", line=dict(width=1, color="gray")),
+            hf_x=bars_df["timestamp"], hf_y=bars_df["high"]
+        )
+        fig.add_trace(
+            go.Scattergl(mode="lines", name="Low", line=dict(width=1, color="gray")),
+            hf_x=bars_df["timestamp"], hf_y=bars_df["low"]
+        )
+    # Hide legend in line mode
+    fig.update_layout(showlegend=False)
+
+    if not trades_df.empty:
         fig.add_trace(go.Scattergl(
-            x=trades_slice["entry_ts"], y=trades_slice["entry_price"],
-            mode="markers", name="Entry",
-            marker=dict(symbol="triangle-up", size=12),
-            text=trades_slice["trade_id"].astype(str),
-            hovertemplate="Entry %{y:.5f}<br>%{x}<br>trade=%{text}<extra></extra>",
+            x=trades_df["entry_ts"], y=trades_df["entry_price"], mode="markers", name="Entry",
+            marker=dict(symbol="triangle-up", size=10)
         ))
-        color = np.where(trades_slice["pnl"]>=0, "green", "red")
+        color = np.where(trades_df["pnl"]>=0, "green", "red")
         fig.add_trace(go.Scattergl(
-            x=trades_slice["exit_ts"], y=trades_slice["exit_price"],
-            mode="markers", name="Exit",
-            marker=dict(symbol="x", size=12, color=color),
-            text=trades_slice["pnl"].round(2).astype(str),
-            hovertemplate="Exit %{y:.5f}<br>%{x}<br>pnl=%{text}<extra></extra>",
+            x=trades_df["exit_ts"], y=trades_df["exit_price"], mode="markers", name="Exit",
+            marker=dict(symbol="x", size=10, color=color)
         ))
-    
-    fig.update_layout(margin=dict(l=0,r=0,t=10,b=0), height=520, xaxis_rangeslider_visible=False)
+
+    fig.update_layout(
+        margin=dict(l=0,r=0,t=10,b=0), height=520, xaxis_rangeslider_visible=False,
+        uirevision="price-graph", dragmode="zoom",
+    )
     return fig
 
 def equity_figure(df_trades):
@@ -207,38 +215,64 @@ def distributions_figure(df_trades):
 @app.callback(
     Output("tab-content","children"),
     Output("trades_table","data"),
+    Output("mode","value"),
     Input("tabs","value"),
     Input("params_dd","value"),
     Input("stoploss_dd","value"),
     Input("side_dd","value"),
+    Input("mode","value"),
     State("current_zoom","data"),
 )
-def render_tab(tab, params_hash, stop_loss, side, zoom):
+def render_tab(tab, params_hash, stop_loss, side, mode, zoom):
     df_tr = filter_trades(params_hash, stop_loss, side)
     if tab == "tab-price":
-        if zoom and "x0" in zoom and "x1" in zoom:
-            mask = (bars["timestamp"]>=zoom["x0"]) & (bars["timestamp"]<=zoom["x1"])
-            bars_slice = bars.loc[mask]
-            df_show = df_tr[(df_tr["entry_ts"]<=zoom["x1"]) & (df_tr["exit_ts"]>=zoom["x0"])]
+        # Build figure using two simple branches: candles vs. line, with inner zoom checks
+        if mode == "candles":
+            if zoom and "x0" in zoom and "x1" in zoom:
+                x0, x1 = pd.to_datetime(zoom["x0"]), pd.to_datetime(zoom["x1"])
+                mask = (bars["timestamp"] >= x0) & (bars["timestamp"] <= x1)
+                if mask.sum() > MAX_CANDLES:
+                    fig = price_figure(bars, df_tr, mode="line")
+                    mode = "line"
+                else:
+                    # Filter trades to current window intersection
+                    df_show = df_tr[(df_tr["entry_ts"] <= x1) & (df_tr["exit_ts"] >= x0)]
+                    fig = price_figure(bars.loc[mask], df_show, mode="candles")
+                    fig.update_layout(xaxis_range=[x0, x1])
+            else:
+                # No zoom yet -> too many by default; fall back to line
+                fig = price_figure(bars, df_tr, mode="line")
+                mode = "line"
         else:
-            # if not df_tr.empty:
-            #     x0 = df_tr["entry_ts"].min() - timedelta(minutes=15)
-            #     x1 = df_tr["exit_ts"].max() + timedelta(minutes=15)
-            #     mask = (bars["timestamp"]>=x0) & (bars["timestamp"]<=x1)
-            #     bars_slice = bars.loc[mask]
-            # else:
-            #     bars_slice = bars
-            bars_slice = bars
-            df_show = df_tr
-        fig = price_figure(bars_slice, df_show)
+            # Line mode: preserve range when switching back using stored zoom
+            if zoom and "x0" in zoom and "x1" in zoom:
+                x0, x1 = pd.to_datetime(zoom["x0"]), pd.to_datetime(zoom["x1"])
+                # Filter trades and compute y-range from bars within the window
+                df_tr = df_tr[(df_tr["entry_ts"] <= x1) & (df_tr["exit_ts"] >= x0)]
+                mask = (bars["timestamp"] >= x0) & (bars["timestamp"] <= x1)
+                bars_slice = bars.loc[mask]
+                fig = price_figure(bars, df_tr, mode="line")
+                if not bars_slice.empty:
+                    y_min = float(bars_slice["low"].min())
+                    y_max = float(bars_slice["high"].max())
+                    pad = (y_max - y_min) * 0.05 if y_max > y_min else 0.5
+                    fig.update_layout(
+                        xaxis_range=[x0, x1],
+                        yaxis_range=[y_min - pad, y_max + pad],
+                        yaxis_autorange=False,
+                    )
+                else:
+                    fig.update_layout(xaxis_range=[x0, x1])
+            else:
+                fig = price_figure(bars, df_tr, mode="line")
         graph = dcc.Graph(id="price_graph", figure=fig, clear_on_unhover=True)
-        return graph, df_tr.to_dict("records")
+        return graph, df_tr.to_dict("records"), mode
     elif tab == "tab-equity":
         fig = equity_figure(df_tr)
-        return dcc.Graph(figure=fig), df_tr.to_dict("records")
+        return dcc.Graph(figure=fig), df_tr.to_dict("records"), dash.no_update
     else:
         content = distributions_figure(df_tr)
-        return content, df_tr.to_dict("records")
+        return content, df_tr.to_dict("records"), dash.no_update
 
 @app.callback(
     Output("current_zoom","data"),
@@ -254,33 +288,65 @@ def keep_zoom(relayout):
         return {"x0":x0, "x1":x1}
     return dash.no_update
 
-@app.callback(
-    Output("price_graph","figure"),
-    Input("trades_table","selected_rows"),
-    State("trades_table","data"),
-    State("params_dd","value"),
-    State("stoploss_dd","value"),
-    State("side_dd","value"),
-    prevent_initial_call=True
-)
-def focus_on_trade(selected_rows, table_data, params_hash, stop_loss, side):
-    if not selected_rows:
-        return dash.no_update
-    row = table_data[selected_rows[0]]
-    entry = pd.to_datetime(row["entry_ts"])
-    exit_ = pd.to_datetime(row["exit_ts"])
-    pad = (exit_ - entry) * 0.5 if exit_>entry else pd.Timedelta(minutes=10)
-    x0, x1 = entry - pad, exit_ + pad
-    mask = (bars["timestamp"]>=x0) & (bars["timestamp"]<=x1)
-    bars_slice = bars.loc[mask]
-    df_tr = filter_trades(params_hash, stop_loss, side)
-    df_show = df_tr[(df_tr["entry_ts"]<=x1) & (df_tr["exit_ts"]>=x0)]
-    fig = price_figure(bars_slice, df_show)
-    fig.add_vrect(x0=entry, x1=exit_, fillcolor="rgba(0,0,0,0.04)", line_width=0)
-    return fig
+# Focus-on-trade callback removed to keep logic minimal
 
-# Register plotly-resampler callback for handling zoom/pan events
-register_plotly_resampler(app)
+@app.callback(
+    Output("price_graph", "figure", allow_duplicate=True),
+    Input("price_graph", "relayoutData"),
+    Input("tab-content", "children"),
+    Input("mode", "value"),
+    State("params_dd", "value"),
+    State("stoploss_dd", "value"),
+    State("side_dd", "value"),
+    State("current_zoom", "data"),
+    prevent_initial_call=True,
+)
+def update_fig(relayoutdata, _tab_children, mode, params_hash, stop_loss, side, zoom):
+    global current_resampler
+    # If triggered by mode change to 'line' and we have a stored zoom, push a resampler patch
+    if not relayoutdata:
+        if mode == "line" and zoom and "x0" in zoom and "x1" in zoom and current_resampler is not None:
+            return current_resampler.construct_update_data_patch({
+                "xaxis.range[0]": zoom["x0"],
+                "xaxis.range[1]": zoom["x1"],
+            })
+        return dash.no_update
+
+    # Only handle zoom/pan events
+    if 'xaxis.range[0]' in relayoutdata and 'xaxis.range[1]' in relayoutdata:
+        x_start = pd.to_datetime(relayoutdata['xaxis.range[0]'])
+        x_end = pd.to_datetime(relayoutdata['xaxis.range[1]'])
+        mask = (bars["timestamp"] >= x_start) & (bars["timestamp"] <= x_end)
+        points_in_range = mask.sum()
+
+        if mode == 'line':
+            # Delegate to resampler
+            if current_resampler is None:
+                return dash.no_update
+            return current_resampler.construct_update_data_patch(relayoutdata)
+        else:
+            # Candles: rebuild only if within limit
+            if points_in_range == 0 or points_in_range > MAX_CANDLES:
+                return dash.no_update
+            df_tr = filter_trades(params_hash, stop_loss, side)
+            # Filter trades to current window
+            df_tr = df_tr[(df_tr["entry_ts"]<=x_end) & (df_tr["exit_ts"]>=x_start)]
+            bars_slice = bars.loc[mask]
+            new_fig = price_figure(bars_slice, df_tr, mode="candles")
+            # Preserve ranges and drag mode
+            y0 = relayoutdata.get('yaxis.range[0]')
+            y1 = relayoutdata.get('yaxis.range[1]')
+            dragmode = 'zoom'
+            new_fig.update_layout(
+                xaxis_range=[x_start, x_end],
+                yaxis_range=[y0, y1] if y0 and y1 else None,
+                uirevision="price-graph",
+                dragmode=dragmode,
+            )
+            return new_fig
+
+    # Not a range-change relayout; nothing to do
+    return dash.no_update
 
 if __name__ == "__main__":
     try:
