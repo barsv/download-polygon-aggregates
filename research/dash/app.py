@@ -1,15 +1,18 @@
 # app.py
-# pip install dash==2.* plotly==5.* pandas numpy
-# optional (for huge series): pip install plotly-resampler==0.9.*
+# pip install dash==2.* plotly==5.* pandas numpy plotly-resampler==0.9.*
 import pandas as pd
 import numpy as np
 from datetime import timedelta
+import os
 
 from dash import Dash, dcc, html, Input, Output, State, dash_table
 import plotly.graph_objects as go
 import plotly.express as px
 import dash
-import os
+
+# Plotly-resampler imports (required)
+from plotly_resampler import FigureResampler, FigureWidgetResampler, register_plotly_resampler
+from plotly_resampler.aggregation import MinMaxLTTB
 
 from research.data_downloader import get_filename
 
@@ -125,13 +128,41 @@ def filter_trades(params_hash, stop_loss, side):
     return df.copy()
 
 def price_figure(bars_slice, trades_slice):
-    fig = go.Figure(data=[
-        go.Candlestick(
-            x=bars_slice["timestamp"], open=bars_slice["open"],
-            high=bars_slice["high"], low=bars_slice["low"], close=bars_slice["close"],
-            name="Price", showlegend=False
+    # Use FigureResampler for large datasets
+    fig = FigureResampler(
+        go.Figure(),
+        default_n_shown_samples=1000,  # Show max 1000 points initially
+        default_downsampler=MinMaxLTTB(parallel=True)  # Use efficient downsampling
+    )
+    
+    # For very large datasets, use close price as line chart
+    if len(bars_slice) > 10000:
+        fig.add_trace(
+            go.Scattergl(
+                x=bars_slice["timestamp"], 
+                y=bars_slice["close"],
+                mode="lines",
+                name="Close Price",
+                line=dict(width=1)
+            ),
+            hf_x=bars_slice["timestamp"],
+            hf_y=bars_slice["close"]
         )
-    ])
+    else:
+        # For smaller datasets, use candlestick with resampling
+        fig.add_trace(
+            go.Candlestick(
+                x=bars_slice["timestamp"], 
+                open=bars_slice["open"],
+                high=bars_slice["high"], 
+                low=bars_slice["low"], 
+                close=bars_slice["close"],
+                name="Price", 
+                showlegend=False
+            )
+        )
+    
+    # Add trade markers (these are usually much fewer points)
     if not trades_slice.empty:
         fig.add_trace(go.Scattergl(
             x=trades_slice["entry_ts"], y=trades_slice["entry_price"],
@@ -148,6 +179,7 @@ def price_figure(bars_slice, trades_slice):
             text=trades_slice["pnl"].round(2).astype(str),
             hovertemplate="Exit %{y:.5f}<br>%{x}<br>pnl=%{text}<extra></extra>",
         ))
+    
     fig.update_layout(margin=dict(l=0,r=0,t=10,b=0), height=520, xaxis_rangeslider_visible=False)
     return fig
 
@@ -189,14 +221,14 @@ def render_tab(tab, params_hash, stop_loss, side, zoom):
             bars_slice = bars.loc[mask]
             df_show = df_tr[(df_tr["entry_ts"]<=zoom["x1"]) & (df_tr["exit_ts"]>=zoom["x0"])]
         else:
-            if not df_tr.empty:
-                x0 = df_tr["entry_ts"].min() - timedelta(minutes=15)
-                x1 = df_tr["exit_ts"].max() + timedelta(minutes=15)
-                mask = (bars["timestamp"]>=x0) & (bars["timestamp"]<=x1)
-                bars_slice = bars.loc[mask]
-            else:
-                bars_slice = bars
-            # bars_slice = bars
+            # if not df_tr.empty:
+            #     x0 = df_tr["entry_ts"].min() - timedelta(minutes=15)
+            #     x1 = df_tr["exit_ts"].max() + timedelta(minutes=15)
+            #     mask = (bars["timestamp"]>=x0) & (bars["timestamp"]<=x1)
+            #     bars_slice = bars.loc[mask]
+            # else:
+            #     bars_slice = bars
+            bars_slice = bars
             df_show = df_tr
         fig = price_figure(bars_slice, df_show)
         graph = dcc.Graph(id="price_graph", figure=fig, clear_on_unhover=True)
@@ -246,6 +278,9 @@ def focus_on_trade(selected_rows, table_data, params_hash, stop_loss, side):
     fig = price_figure(bars_slice, df_show)
     fig.add_vrect(x0=entry, x1=exit_, fillcolor="rgba(0,0,0,0.04)", line_width=0)
     return fig
+
+# Register plotly-resampler callback for handling zoom/pan events
+register_plotly_resampler(app)
 
 if __name__ == "__main__":
     try:
