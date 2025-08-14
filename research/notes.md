@@ -12,14 +12,21 @@ q3: how rmse is related to correlation?
 
 --
 
+research: 
+
 + first test then analyze all points
 
 + launch all points
-
-- use ATR
 
 - analyze results
 -- prev year
 -- next year
 -- create flat csv
 -- plot on chart
+
+- use ATR
+
+
+
+
+- multithreading

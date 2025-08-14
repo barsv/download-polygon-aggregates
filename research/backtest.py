@@ -1,7 +1,6 @@
 import numpy as np
 import sys, os
 import pandas as pd
-import plotly.express as px
 import random
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
