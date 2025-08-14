@@ -12,7 +12,7 @@ import numpy as np
 CKPT = "./data"
 os.makedirs(CKPT, exist_ok=True)
 
-def save_ckpt(checkpoint_data, compress=True):
+def save_ckpt(checkpoint_data, compress=True, max_checkpoints=5):
     """Atomic single-file pickle checkpoint with optional compression."""
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     ext = ".pkl.gz" if compress else ".pkl"
@@ -27,6 +27,16 @@ def save_ckpt(checkpoint_data, compress=True):
             pickle.dump(checkpoint_data, f)
     
     os.replace(tmp, fp)
+    
+    # Clean up old checkpoints, keep only the most recent max_checkpoints
+    files = sorted(glob.glob(os.path.join(CKPT, "ckpt_*.pkl*")))
+    if len(files) > max_checkpoints:
+        # Remove oldest files
+        for old_file in files[:-max_checkpoints]:
+            try:
+                os.remove(old_file)
+            except OSError:
+                pass  # Ignore if file was already removed
 
 def load_ckpt():
     """Return checkpoint data from latest checkpoint or None."""
