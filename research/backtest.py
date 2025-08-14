@@ -19,6 +19,8 @@ interval = '5s'
 year = '2024'
 # Set the random seed for reproducibility
 random.seed(42)
+# Force fixed-point notation instead of scientific notation
+np.set_printoptions(suppress=True, precision=6)
 
 print('loading prices')
 # download data to the file on disk.
@@ -61,8 +63,11 @@ else:
     seen = np.zeros(len(df), dtype=int)
 
 print('backtesting')
-N = 1000
+N = 100 #len(all_indices) - start_from #1000
+checkpoint_interval = 100
+processed_count = 0  # Track processed patterns separately
 tqdm.write(f'starting from {start_from}')
+tqdm.write(f'processing {N} patterns, saving checkpoints every {checkpoint_interval} iterations')
 for i in tqdm(range(start_from, start_from + N)):
     start_index = all_indices[i]
     # Skip if index is too close to end of data to create full window
@@ -84,6 +89,7 @@ for i in tqdm(range(start_from, start_from + N)):
         profits_means = tsl_profits[:, entry_points].mean(axis=1)
         profits_max = max(profits_means)
         profits_stds = tsl_profits[:, entry_points].std(axis=1)
+        #               index 0      index 1      index 2              index 3        index 4
         results.append((start_index, profits_max, len(similar_starts), profits_means, profits_stds))
     # if there is only one point with r > r_limit then it's the start_index with r == 1
     if len(similar_starts) == 1:
@@ -95,8 +101,19 @@ for i in tqdm(range(start_from, start_from + N)):
         high_corr_starts = np.where(high_corr_mask)[0]
         seen[high_corr_starts] = 1
     start_from += 1
+    processed_count += 1
+    # Save checkpoint every N iterations
+    if processed_count % checkpoint_interval == 0:
+        tqdm.write(f'saving intermediate checkpoint at iteration {i}')
+        checkpoint_data = {
+            'results': results,
+            'start_from': start_from,
+            'seen': seen
+        }
+        save_ckpt(checkpoint_data)
+
 for best in sorted(results, key=lambda x: x[1], reverse=True)[:3]:
-    print(f'start_index = {best[0]}, similar points = {best[1]}, max mean profit = {best[2]}')
+    print(f'start_index = {best[0]}, max mean profit = {best[1]}, similar points = {best[2]}')
     print(f'mean tsl profits:\n{best[3]}')
 
 print('saving the checkpoint')
@@ -106,3 +123,4 @@ checkpoint_data = {
     'seen': seen
 }
 save_ckpt(checkpoint_data)
+print('completed')

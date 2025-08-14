@@ -9,3 +9,17 @@ q1: how many unique patterns?
 q2: if a is close to b and c, is c close to b?
 
 q3: how rmse is related to correlation?
+
+--
+
++ first test then analyze all points
+
++ launch all points
+
+- use ATR
+
+- analyze results
+-- prev year
+-- next year
+-- create flat csv
+-- plot on chart
