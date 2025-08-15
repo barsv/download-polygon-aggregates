@@ -23,7 +23,7 @@ year = '2024'
 pwd = os.path.dirname(os.path.abspath(__file__))
 filename = get_filename(ticker, interval, year)
 bars = pd.read_parquet(f'{pwd}/../{filename}')
-bars = bars[:80000]
+#bars = bars[:80000]
 bars['timestamp'] = pd.to_datetime(bars['timestamp'], unit='s')
 # bars = pd.read_csv("bars.csv", parse_dates=["timestamp"]).sort_values("timestamp")
 trades = pd.read_csv(f"{pwd}/trades.csv", parse_dates=["entry_ts", "exit_ts"]).sort_values("entry_ts")
@@ -158,41 +158,25 @@ def price_figure(bars_df, trades_df, mode="line"):
             low=bars_df["low"], close=bars_df["close"], name="Price", showlegend=False
         ))
     else:
-        # # --- ORIGINAL RESAMPLER CODE (commented out for debugging) ---
-        # fig = FigureResampler(
-        #     default_n_shown_samples=2000,
-        #     default_downsampler=MinMaxLTTB(parallel=False)
-        # )
-        # current_resampler = fig
-        # # Close, High, Low lines; all resampled
-        # fig.add_trace(
-        #     go.Scattergl(mode="lines", name="Close", line=dict(width=1)),
-        #     hf_x=bars_df["timestamp"], hf_y=bars_df["close"]
-        # )
-        # fig.add_trace(
-        #     go.Scattergl(mode="lines", name="High", line=dict(width=1, color="gray")),
-        #     hf_x=bars_df["timestamp"], hf_y=bars_df["high"]
-        # )
-        # fig.add_trace(
-        #     go.Scattergl(mode="lines", name="Low", line=dict(width=1, color="gray")),
-        #     hf_x=bars_df["timestamp"], hf_y=bars_df["low"]
-        # )
-
-        # --- DEBUG: Plain Plotly traces, no resampler ---
-        current_resampler = None
-        fig = go.Figure()
-        fig.add_trace(go.Scattergl(
-            x=bars_df["timestamp"], y=bars_df["close"], mode="lines",
-            name="Close", line=dict(width=1)
-        ))
-        fig.add_trace(go.Scattergl(
-            x=bars_df["timestamp"], y=bars_df["high"], mode="lines",
-            name="High", line=dict(width=1, color="gray")
-        ))
-        fig.add_trace(go.Scattergl(
-            x=bars_df["timestamp"], y=bars_df["low"], mode="lines",
-            name="Low", line=dict(width=1, color="gray")
-        ))
+        # --- ORIGINAL RESAMPLER CODE (commented out for debugging) ---
+        fig = FigureResampler(
+            default_n_shown_samples=2000,
+            default_downsampler=MinMaxLTTB(parallel=False)
+        )
+        current_resampler = fig
+        # Close, High, Low lines; all resampled
+        fig.add_trace(
+            go.Scattergl(mode="lines", name="Close", line=dict(width=1)),
+            hf_x=bars_df["timestamp"], hf_y=bars_df["close"]
+        )
+        fig.add_trace(
+            go.Scattergl(mode="lines", name="High", line=dict(width=1, color="gray")),
+            hf_x=bars_df["timestamp"], hf_y=bars_df["high"]
+        )
+        fig.add_trace(
+            go.Scattergl(mode="lines", name="Low", line=dict(width=1, color="gray")),
+            hf_x=bars_df["timestamp"], hf_y=bars_df["low"]
+        )
     # Hide legend in line mode
     fig.update_layout(showlegend=False)
 
