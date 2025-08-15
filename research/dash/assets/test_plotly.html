@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Plotly.js Scroll Zoom Test</title>
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #plot {
+            width: 100%;
+            height: 500px;
+            border: 1px solid #ccc;
+        }
+        #log {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f0f0f0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Plotly.js Scroll Zoom Test</h1>
+    <div id="plot"></div>
+    <div id="log"></div>
+
+    <script>
+        // Generate test data (same as in Python)
+        const N = 60000;
+        const start = new Date('2024-01-01T00:00:00');
+        
+        const x = [];
+        const y = [];
+        let cumsum = 0;
+        
+        for (let i = 0; i < N; i++) {
+            const timestamp = new Date(start.getTime() + i * 1000); // 1 second intervals
+            x.push(timestamp);
+            
+            // Random walk
+            cumsum += (Math.random() - 0.5) * 1.0;
+            y.push(cumsum);
+        }
+        
+        console.log(`Generated ${N} data points`);
+        
+        // Create plot
+        const trace = {
+            x: x,
+            y: y,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Random Walk',
+            line: {width: 1}
+        };
+        
+        const layout = {
+            title: 'Scroll Zoom Test',
+            margin: {l: 40, r: 40, t: 40, b: 40},
+            height: 500,
+            xaxis: {
+                type: 'date',
+                rangeslider: {visible: false}
+            },
+            dragmode: 'zoom'
+        };
+        
+        const config = {
+            scrollZoom: true,
+            responsive: true
+        };
+        
+        // Plot
+        Plotly.newPlot('plot', [trace], layout, config);
+        
+        // Logging
+        let logCounter = 0;
+        function log(message) {
+            const timestamp = new Date().toISOString().slice(11, 23);
+            const logDiv = document.getElementById('log');
+            logDiv.textContent += `${timestamp} [${logCounter++}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        // Listen to relayout events
+        document.getElementById('plot').on('plotly_relayout', function(eventData) {
+            if (eventData['xaxis.range[0]'] && eventData['xaxis.range[1]']) {
+                const x0 = eventData['xaxis.range[0]'];
+                const x1 = eventData['xaxis.range[1]'];
+                log(`relayout: x0=${x0.slice(0, 19)}, x1=${x1.slice(0, 19)}`);
+            } else {
+                log(`relayout: ${JSON.stringify(eventData)}`);
+            }
+        });
+        
+        log('Plot initialized. Try scroll zooming...');
+    </script>
+</body>
+</html>

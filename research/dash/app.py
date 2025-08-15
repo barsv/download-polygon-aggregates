@@ -23,7 +23,7 @@ year = '2024'
 pwd = os.path.dirname(os.path.abspath(__file__))
 filename = get_filename(ticker, interval, year)
 bars = pd.read_parquet(f'{pwd}/../{filename}')
-bars = bars[:5000]
+bars = bars[:80000]
 bars['timestamp'] = pd.to_datetime(bars['timestamp'], unit='s')
 # bars = pd.read_csv("bars.csv", parse_dates=["timestamp"]).sort_values("timestamp")
 trades = pd.read_csv(f"{pwd}/trades.csv", parse_dates=["entry_ts", "exit_ts"]).sort_values("entry_ts")
@@ -158,7 +158,7 @@ def price_figure(bars_df, trades_df, mode="line"):
             low=bars_df["low"], close=bars_df["close"], name="Price", showlegend=False
         ))
     else:
-        # --- ORIGINAL RESAMPLER CODE (commented out for debugging) ---
+        # # --- ORIGINAL RESAMPLER CODE (commented out for debugging) ---
         # fig = FigureResampler(
         #     default_n_shown_samples=2000,
         #     default_downsampler=MinMaxLTTB(parallel=False)
@@ -208,7 +208,7 @@ def price_figure(bars_df, trades_df, mode="line"):
         ))
 
     fig.update_layout(
-        margin=dict(l=0,r=0,t=10,b=0), height=520, xaxis_rangeslider_visible=False,
+        margin=dict(l=50,r=50,t=10,b=0), height=520, xaxis_rangeslider_visible=False,
         uirevision="price-graph", dragmode="zoom",
     )
     return fig
@@ -298,19 +298,19 @@ def render_tab(tab, params_hash, stop_loss, side, mode, zoom):
         content = distributions_figure(df_tr)
         return content, df_tr.to_dict("records"), dash.no_update
 
-# @app.callback(
-#     Output("current_zoom","data"),
-#     Input("price_graph","relayoutData"),
-#     prevent_initial_call=True
-# )
-# def keep_zoom(relayout):
-#     if not relayout:
-#         return dash.no_update
-#     x0 = relayout.get("xaxis.range[0]")
-#     x1 = relayout.get("xaxis.range[1]")
-#     if x0 and x1:
-#         return {"x0":x0, "x1":x1}
-#     return dash.no_update
+@app.callback(
+    Output("current_zoom","data"),
+    Input("price_graph","relayoutData"),
+    prevent_initial_call=True
+)
+def keep_zoom(relayout):
+    if not relayout:
+        return dash.no_update
+    x0 = relayout.get("xaxis.range[0]")
+    x1 = relayout.get("xaxis.range[1]")
+    if x0 and x1:
+        return {"x0":x0, "x1":x1}
+    return dash.no_update
 
 # Focus-on-trade callback removed to keep logic minimal
 

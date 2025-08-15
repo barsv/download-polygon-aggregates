@@ -24,7 +24,7 @@ fig.update_layout(
     margin=dict(l=0, r=0, t=10, b=0),
     height=520,
     xaxis_rangeslider_visible=False,
-    uirevision='minimal-example',
+    # uirevision=True,  # Remove uirevision completely
     dragmode='zoom',
 )
 

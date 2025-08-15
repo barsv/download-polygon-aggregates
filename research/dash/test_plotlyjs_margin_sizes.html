@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Plotly.js Margins vs Jerky Scroll Test</title>
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+</head>
+<body>
+    <h1>Pure plotly.js: Margin Size vs Jerky Scroll Test</h1>
+    <p>Testing if small margins cause jerky scroll zoom in pure plotly.js (no Python wrapper)</p>
+    
+    <h3>1. Tiny margins (l=0,r=0,t=10,b=0) - Should this be jerky?</h3>
+    <div id="plot1" style="width:100%;height:400px;"></div>
+    
+    <h3>2. Small margins (l=10,r=10,t=20,b=10)</h3>
+    <div id="plot2" style="width:100%;height:400px;"></div>
+    
+    <h3>3. Medium margins (l=40,r=40,t=40,b=40)</h3>
+    <div id="plot3" style="width:100%;height:400px;"></div>
+    
+    <h3>4. Large margins (l=60,r=60,t=50,b=30)</h3>
+    <div id="plot4" style="width:100%;height:400px;"></div>
+
+    <script>
+        // Generate test data (same as Python version)
+        const N = 60000;
+        const startTime = new Date('2024-01-01T00:00:00');
+        const x = [];
+        const y = [];
+        
+        let currentY = 0;
+        for (let i = 0; i < N; i++) {
+            x.push(new Date(startTime.getTime() + i * 1000));
+            currentY += (Math.random() - 0.5) * 0.5;
+            y.push(currentY);
+        }
+        
+        const trace = {
+            x: x,
+            y: y,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'data'
+        };
+        
+        const config = {
+            scrollZoom: true,
+            displayModeBar: true
+        };
+        
+        // Test different margins
+        const marginTests = [
+            {id: 'plot1', margin: {l: 0, r: 0, t: 10, b: 0}, title: 'Tiny margins'},
+            {id: 'plot2', margin: {l: 10, r: 10, t: 20, b: 10}, title: 'Small margins'},
+            {id: 'plot3', margin: {l: 40, r: 40, t: 40, b: 40}, title: 'Medium margins'},
+            {id: 'plot4', margin: {l: 60, r: 60, t: 50, b: 30}, title: 'Large margins'}
+        ];
+        
+        marginTests.forEach(test => {
+            const layout = {
+                title: test.title,
+                margin: test.margin,
+                height: 400,
+                xaxis: {
+                    type: 'date',
+                    rangeslider: {visible: false}
+                },
+                dragmode: 'zoom'
+            };
+            
+            Plotly.newPlot(test.id, [trace], layout, config);
+            console.log(`Created ${test.id} with margins:`, test.margin);
+        });
+        
+        console.log('All plots created. Test scroll zoom on each!');
+        console.log('Pay special attention to plot1 (tiny margins) vs plot4 (large margins)');
+    </script>
+</body>
+</html>
