@@ -208,8 +208,8 @@ def price_figure(bars_df, trades_df, mode="line"):
         ))
 
     fig.update_layout(
-        margin=dict(l=50,r=50,t=10,b=0), height=520, xaxis_rangeslider_visible=False,
-        uirevision="price-graph", dragmode="zoom",
+        margin=dict(l=50,r=50,t=23,b=0), height=520, xaxis_rangeslider_visible=False,
+        uirevision="price-graph", dragmode="pan",
     )
     return fig
 
@@ -246,7 +246,6 @@ def distributions_figure(df_trades):
     State("current_zoom","data"),
 )
 def render_tab(tab, params_hash, stop_loss, side, mode, zoom):
-    log('render_tab')
     df_tr = filter_trades(params_hash, stop_loss, side)
     if tab == "tab-price":
         # Build figure using two simple branches: candles vs. line, with inner zoom checks
@@ -326,7 +325,6 @@ def keep_zoom(relayout):
     prevent_initial_call=True,
 )
 def update_fig(relayoutdata, _tab_children, mode, params_hash, stop_loss, side, zoom):
-    log(f'update_fig')
     global current_resampler
     # If triggered by mode change to 'line' and we have a stored zoom, push a resampler patch
     if not relayoutdata:
@@ -339,7 +337,6 @@ def update_fig(relayoutdata, _tab_children, mode, params_hash, stop_loss, side, 
 
     # Only handle zoom/pan events
     if 'xaxis.range[0]' in relayoutdata and 'xaxis.range[1]' in relayoutdata:
-        log(f'update_fig {relayoutdata['xaxis.range[0]']}')
         x_start = pd.to_datetime(relayoutdata['xaxis.range[0]'])
         x_end = pd.to_datetime(relayoutdata['xaxis.range[1]'])
         mask = (bars["timestamp"] >= x_start) & (bars["timestamp"] <= x_end)
@@ -351,7 +348,6 @@ def update_fig(relayoutdata, _tab_children, mode, params_hash, stop_loss, side, 
                 return dash.no_update
             return current_resampler.construct_update_data_patch(relayoutdata)
         else:
-            log('Candles')
             # Candles: rebuild only if within limit
             if points_in_range == 0 or points_in_range > MAX_CANDLES:
                 return dash.no_update
@@ -363,7 +359,7 @@ def update_fig(relayoutdata, _tab_children, mode, params_hash, stop_loss, side, 
             # Preserve ranges and drag mode
             y0 = relayoutdata.get('yaxis.range[0]')
             y1 = relayoutdata.get('yaxis.range[1]')
-            dragmode = 'zoom'
+            dragmode = 'pan'
             new_fig.update_layout(
                 xaxis_range=[x_start, x_end],
                 yaxis_range=[y0, y1] if y0 and y1 else None,
@@ -376,4 +372,4 @@ def update_fig(relayoutdata, _tab_children, mode, params_hash, stop_loss, side, 
     return dash.no_update
 
 if __name__ == "__main__":
-    app.run(debug=True, threaded=False, dev_tools_hot_reload=False)
+    app.run(debug=True, threaded=False, dev_tools_hot_reload=False, use_reloader=False)
