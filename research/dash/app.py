@@ -2,7 +2,7 @@
 # pip install dash==2.* plotly==5.* pandas numpy plotly-resampler==0.9.*
 import pandas as pd
 import numpy as np
-from datetime import timedelta
+from datetime import datetime, timedelta
 import os
 
 from dash import Dash, dcc, html, Input, Output, State, dash_table
@@ -23,6 +23,7 @@ year = '2024'
 pwd = os.path.dirname(os.path.abspath(__file__))
 filename = get_filename(ticker, interval, year)
 bars = pd.read_parquet(f'{pwd}/../{filename}')
+bars = bars[:5000]
 bars['timestamp'] = pd.to_datetime(bars['timestamp'], unit='s')
 # bars = pd.read_csv("bars.csv", parse_dates=["timestamp"]).sort_values("timestamp")
 trades = pd.read_csv(f"{pwd}/trades.csv", parse_dates=["entry_ts", "exit_ts"]).sort_values("entry_ts")
@@ -131,6 +132,10 @@ app.layout = html.Div(
 )
 
 # ---------- Helpers ----------
+def log(msg):
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    print(f"{ts} {msg}")
+
 def filter_trades(params_hash, stop_loss, side):
     df = trades
     if params_hash is not None:
@@ -153,24 +158,41 @@ def price_figure(bars_df, trades_df, mode="line"):
             low=bars_df["low"], close=bars_df["close"], name="Price", showlegend=False
         ))
     else:
-        fig = FigureResampler(
-            default_n_shown_samples=2000,
-            default_downsampler=MinMaxLTTB(parallel=True)
-        )
-        current_resampler = fig
-        # Close, High, Low lines; all resampled
-        fig.add_trace(
-            go.Scattergl(mode="lines", name="Close", line=dict(width=1)),
-            hf_x=bars_df["timestamp"], hf_y=bars_df["close"]
-        )
-        fig.add_trace(
-            go.Scattergl(mode="lines", name="High", line=dict(width=1, color="gray")),
-            hf_x=bars_df["timestamp"], hf_y=bars_df["high"]
-        )
-        fig.add_trace(
-            go.Scattergl(mode="lines", name="Low", line=dict(width=1, color="gray")),
-            hf_x=bars_df["timestamp"], hf_y=bars_df["low"]
-        )
+        # --- ORIGINAL RESAMPLER CODE (commented out for debugging) ---
+        # fig = FigureResampler(
+        #     default_n_shown_samples=2000,
+        #     default_downsampler=MinMaxLTTB(parallel=False)
+        # )
+        # current_resampler = fig
+        # # Close, High, Low lines; all resampled
+        # fig.add_trace(
+        #     go.Scattergl(mode="lines", name="Close", line=dict(width=1)),
+        #     hf_x=bars_df["timestamp"], hf_y=bars_df["close"]
+        # )
+        # fig.add_trace(
+        #     go.Scattergl(mode="lines", name="High", line=dict(width=1, color="gray")),
+        #     hf_x=bars_df["timestamp"], hf_y=bars_df["high"]
+        # )
+        # fig.add_trace(
+        #     go.Scattergl(mode="lines", name="Low", line=dict(width=1, color="gray")),
+        #     hf_x=bars_df["timestamp"], hf_y=bars_df["low"]
+        # )
+
+        # --- DEBUG: Plain Plotly traces, no resampler ---
+        current_resampler = None
+        fig = go.Figure()
+        fig.add_trace(go.Scattergl(
+            x=bars_df["timestamp"], y=bars_df["close"], mode="lines",
+            name="Close", line=dict(width=1)
+        ))
+        fig.add_trace(go.Scattergl(
+            x=bars_df["timestamp"], y=bars_df["high"], mode="lines",
+            name="High", line=dict(width=1, color="gray")
+        ))
+        fig.add_trace(go.Scattergl(
+            x=bars_df["timestamp"], y=bars_df["low"], mode="lines",
+            name="Low", line=dict(width=1, color="gray")
+        ))
     # Hide legend in line mode
     fig.update_layout(showlegend=False)
 
@@ -224,6 +246,7 @@ def distributions_figure(df_trades):
     State("current_zoom","data"),
 )
 def render_tab(tab, params_hash, stop_loss, side, mode, zoom):
+    log('render_tab')
     df_tr = filter_trades(params_hash, stop_loss, side)
     if tab == "tab-price":
         # Build figure using two simple branches: candles vs. line, with inner zoom checks
@@ -265,7 +288,8 @@ def render_tab(tab, params_hash, stop_loss, side, mode, zoom):
                     fig.update_layout(xaxis_range=[x0, x1])
             else:
                 fig = price_figure(bars, df_tr, mode="line")
-        graph = dcc.Graph(id="price_graph", figure=fig, clear_on_unhover=True)
+        graph = dcc.Graph(id="price_graph", figure=fig, clear_on_unhover=True,
+                          config={ "scrollZoom": True })
         return graph, df_tr.to_dict("records"), mode
     elif tab == "tab-equity":
         fig = equity_figure(df_tr)
@@ -274,19 +298,19 @@ def render_tab(tab, params_hash, stop_loss, side, mode, zoom):
         content = distributions_figure(df_tr)
         return content, df_tr.to_dict("records"), dash.no_update
 
-@app.callback(
-    Output("current_zoom","data"),
-    Input("price_graph","relayoutData"),
-    prevent_initial_call=True
-)
-def keep_zoom(relayout):
-    if not relayout:
-        return dash.no_update
-    x0 = relayout.get("xaxis.range[0]")
-    x1 = relayout.get("xaxis.range[1]")
-    if x0 and x1:
-        return {"x0":x0, "x1":x1}
-    return dash.no_update
+# @app.callback(
+#     Output("current_zoom","data"),
+#     Input("price_graph","relayoutData"),
+#     prevent_initial_call=True
+# )
+# def keep_zoom(relayout):
+#     if not relayout:
+#         return dash.no_update
+#     x0 = relayout.get("xaxis.range[0]")
+#     x1 = relayout.get("xaxis.range[1]")
+#     if x0 and x1:
+#         return {"x0":x0, "x1":x1}
+#     return dash.no_update
 
 # Focus-on-trade callback removed to keep logic minimal
 
@@ -302,6 +326,7 @@ def keep_zoom(relayout):
     prevent_initial_call=True,
 )
 def update_fig(relayoutdata, _tab_children, mode, params_hash, stop_loss, side, zoom):
+    log(f'update_fig')
     global current_resampler
     # If triggered by mode change to 'line' and we have a stored zoom, push a resampler patch
     if not relayoutdata:
@@ -314,6 +339,7 @@ def update_fig(relayoutdata, _tab_children, mode, params_hash, stop_loss, side, 
 
     # Only handle zoom/pan events
     if 'xaxis.range[0]' in relayoutdata and 'xaxis.range[1]' in relayoutdata:
+        log(f'update_fig {relayoutdata['xaxis.range[0]']}')
         x_start = pd.to_datetime(relayoutdata['xaxis.range[0]'])
         x_end = pd.to_datetime(relayoutdata['xaxis.range[1]'])
         mask = (bars["timestamp"] >= x_start) & (bars["timestamp"] <= x_end)
@@ -325,6 +351,7 @@ def update_fig(relayoutdata, _tab_children, mode, params_hash, stop_loss, side, 
                 return dash.no_update
             return current_resampler.construct_update_data_patch(relayoutdata)
         else:
+            log('Candles')
             # Candles: rebuild only if within limit
             if points_in_range == 0 or points_in_range > MAX_CANDLES:
                 return dash.no_update
@@ -349,7 +376,4 @@ def update_fig(relayoutdata, _tab_children, mode, params_hash, stop_loss, side, 
     return dash.no_update
 
 if __name__ == "__main__":
-    try:
-        app.run(debug=True)
-    except AttributeError:
-        app.run_server(debug=True)
+    app.run(debug=True, threaded=False, dev_tools_hot_reload=False)
