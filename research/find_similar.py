@@ -80,14 +80,14 @@ for i in tqdm(range(start_from, start_from + N)):
             'results': results,
             'start_from': start_from,
         }
-        save_ckpt(checkpoint_data)
+        save_ckpt(checkpoint_data, ckpt_dir)
 
 print('saving the last checkpoint')
 checkpoint_data = {
     'results_pickle': results,
     'start_from': start_from,
 }
-save_ckpt(checkpoint_data)
+save_ckpt(checkpoint_data, ckpt_dir)
 
 for best in sorted(results, key=lambda x: x[1], reverse=True)[:5]:
     print(f'start_index = {best[0]}, similar points = {best[1]}')
