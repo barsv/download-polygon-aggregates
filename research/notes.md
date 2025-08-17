@@ -10,6 +10,8 @@ q2: if a is close to b and c, is c close to b?
 
 q3: how rmse is related to correlation?
 
+q4: we rescale only prices (y-axe). shall we rescale the time (x-axe)?
+
 --
 
 research: 

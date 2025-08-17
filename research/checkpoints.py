@@ -9,14 +9,15 @@ import os, glob
 from datetime import datetime, timezone
 import numpy as np
 
-CKPT = "./data"
-os.makedirs(CKPT, exist_ok=True)
 
-def save_ckpt(checkpoint_data, compress=True, max_checkpoints=5):
+def save_ckpt(checkpoint_data, dir, compress=True, max_checkpoints=5):
     """Atomic single-file pickle checkpoint with optional compression."""
+    if not dir:
+        raise Exception("checkpoint dir is missing")
+    os.makedirs(dir, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     ext = ".pkl.gz" if compress else ".pkl"
-    fp = os.path.join(CKPT, f"ckpt_{ts}{ext}")
+    fp = os.path.join(dir, f"ckpt_{ts}{ext}")
     tmp = fp + ".tmp"
     
     if compress:
@@ -29,7 +30,7 @@ def save_ckpt(checkpoint_data, compress=True, max_checkpoints=5):
     os.replace(tmp, fp)
     
     # Clean up old checkpoints, keep only the most recent max_checkpoints
-    files = sorted(glob.glob(os.path.join(CKPT, "ckpt_*.pkl*")))
+    files = sorted(glob.glob(os.path.join(dir, "ckpt_*.pkl*")))
     if len(files) > max_checkpoints:
         # Remove oldest files
         for old_file in files[:-max_checkpoints]:
@@ -38,10 +39,10 @@ def save_ckpt(checkpoint_data, compress=True, max_checkpoints=5):
             except OSError:
                 pass  # Ignore if file was already removed
 
-def load_ckpt():
+def load_ckpt(dir):
     """Return checkpoint data from latest checkpoint or None."""
     # Look for both compressed and uncompressed files
-    files = sorted(glob.glob(os.path.join(CKPT, "ckpt_*.pkl*")))
+    files = sorted(glob.glob(os.path.join(dir, "ckpt_*.pkl*")))
     if not files: 
         return None
     
@@ -56,14 +57,19 @@ def load_ckpt():
     
     return checkpoint_data
 
-# results1 = [1,2,3]
-# results2 = np.zeros(4)
-# results2[1] = 123
+if __name__ == '__main__':
+    print('ok')
+    results1 = [1,2,3]
+    results2 = np.zeros(4)
+    results2[1] = 123
+    ckpt_data = { 'results1': results1, 'results2': results2, 'step': 42, 'test': 'some str'  }
+    # path to the current script
+    pwd = os.path.dirname(os.path.abspath(__file__))
+    test_dir = f'{pwd}/data/ckpt_test'
+    save_ckpt(ckpt_data, test_dir)
 
-# save_ckpt({ 'results1': results1, 'results2': results2, 'step': 42, 'test': 'some str'  })
-
-# ckpt = load_ckpt()
-# print(ckpt['results1'])
-# print(ckpt['results2'])
-# print(ckpt['step'])
-# print(ckpt['test'])
+    ckpt = load_ckpt(test_dir)
+    print(ckpt['results1'])
+    print(ckpt['results2'])
+    print(ckpt['step'])
+    print(ckpt['test'])

@@ -20,7 +20,7 @@ from research.data_downloader import get_filename
 ticker = 'AAPL'
 interval = '5s'
 year = '2024'
-pwd = os.path.dirname(os.path.abspath(__file__))
+pwd = os.path.dirname(os.path.abspath(__file__)) # path to the current script
 filename = get_filename(ticker, interval, year)
 bars = pd.read_parquet(f'{pwd}/../{filename}')
 #bars = bars[:80000]
