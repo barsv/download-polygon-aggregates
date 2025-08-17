@@ -5,10 +5,14 @@ far from best bid/ask on a given exchange at the moment. such OTC deals will be 
 answer: ???
 
 q1: how many unique patterns?
+a: tSNE in results_analysis.ipynb
 
 q2: if a is close to b and c, is c close to b?
+a: https://chatgpt.com/c/6892ec33-8b48-832b-a2a4-927ce84e3d67
 
 q3: how rmse is related to correlation?
+a: https://chatgpt.com/c/6890f9c5-5874-8331-a846-2dda502b541e
+correlation_intuition.ipynb
 
 q4: we rescale only prices (y-axe). shall we rescale the time (x-axe)?
 
@@ -21,14 +25,11 @@ research:
 + launch all points
 
 - analyze results
+-- plot on chart
+- use ATR
 -- prev year
 -- next year
--- create flat csv
--- plot on chart
-
-- use ATR
-
-
+++ create flat csv
 
 
 - multithreading
