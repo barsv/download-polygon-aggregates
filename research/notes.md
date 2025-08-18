@@ -24,6 +24,9 @@ research:
 
 + launch all points
 
+- update results_analysis after recalculation of find_similar
+-- create visualization of similar points for selected point on to of tSNE
+-- draw patterns by hand
 - analyze results
 -- plot on chart
 - use ATR
