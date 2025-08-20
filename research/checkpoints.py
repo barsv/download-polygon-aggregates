@@ -39,14 +39,17 @@ def save_ckpt(checkpoint_data, dir, compress=True, max_checkpoints=5):
             except OSError:
                 pass  # Ignore if file was already removed
 
-def load_ckpt(dir):
+def load_ckpt(dir, filename=None):
     """Return checkpoint data from latest checkpoint or None."""
-    # Look for both compressed and uncompressed files
-    files = sorted(glob.glob(os.path.join(dir, "ckpt_*.pkl*")))
-    if not files: 
-        return None
-    
-    latest_file = files[-1]
+    if filename == None:
+        # Look for both compressed and uncompressed files
+        files = sorted(glob.glob(os.path.join(dir, "ckpt_*.pkl*")))
+        if not files: 
+            return None
+        
+        latest_file = files[-1]
+    else:
+        latest_file = os.path.join(dir, filename)
     
     if latest_file.endswith('.gz'):
         with gzip.open(latest_file, 'rb') as f:

@@ -55,7 +55,7 @@ def calculate_pl_numba(
     num_entries = len(df_open)
     num_sl_levels = len(stop_loss_levels)
     # Numba does not work well with list-of-dicts, so we collect results in a NumPy array
-    results_np = np.empty((num_sl_levels, num_entries - 1)) # profits for each SL level
+    results_np = np.empty((num_sl_levels, num_entries)) # profits for each SL level
     # Iterate over each stop-loss level
     for sl_idx in range(num_sl_levels):
         sl_level = stop_loss_levels[sl_idx]
@@ -64,7 +64,7 @@ def calculate_pl_numba(
         # For long positions (sl_level < 0)
         if sl_level < 0:
             # Iterate over each entry in the experimental dataframe (except the last one)
-            for i in range(num_entries - 1):
+            for i in range(num_entries):
                 entry_price = df_open[i]
                 stop_price = entry_price * (1 + sl_level)
                 exit_price = 0.0
@@ -86,7 +86,7 @@ def calculate_pl_numba(
                 results_np[sl_idx, i] = 100 * (exit_price - entry_price) / entry_price
         # For short positions (sl_level > 0)
         elif sl_level > 0:
-            for i in range(num_entries - 1):
+            for i in range(num_entries):
                 entry_price = df_open[i]
                 stop_price = entry_price * (1 + sl_level)
                 exit_price = 0.0
