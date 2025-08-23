@@ -85,8 +85,31 @@ def create_price_chart(bars_df, trades_df):
     base = go.FigureWidget()
     fig = FigureWidgetResampler(base)
 
-    # main line only
-    fig.add_trace(go.Scattergl(mode="lines", name="Close"), hf_x=ts, hf_y=bars_df["close"])
+    # Price lines
+    fig.add_trace(
+        go.Scattergl(mode="lines", name="Close", line=dict(color="#1f77b4", width=4)),
+        hf_x=ts, hf_y=bars_df["close"],
+    )
+    if {"high", "low"}.issubset(bars_df.columns):
+        fig.add_trace(
+            go.Scattergl(mode="lines", name="High", line=dict(color="black", width=1), opacity=0.9),
+            hf_x=ts, hf_y=bars_df["high"],
+        )
+        fig.add_trace(
+            go.Scattergl(mode="lines", name="Low", line=dict(color="black", width=1), opacity=0.9),
+            hf_x=ts, hf_y=bars_df["low"],
+        )
+
+    # Stop-loss bands based on ATR (if precomputed columns exist)
+    if {"sl_long", "sl_short"}.issubset(bars_df.columns):
+        fig.add_trace(
+            go.Scattergl(mode="lines", name="SL Long", line=dict(color="red", width=1.5)),
+            hf_x=ts, hf_y=bars_df["sl_long"],
+        )
+        fig.add_trace(
+            go.Scattergl(mode="lines", name="SL Short", line=dict(color="red", width=1.5)),
+            hf_x=ts, hf_y=bars_df["sl_short"],
+        )
 
     # (optional) trades overlay — как у тебя
 
@@ -218,6 +241,32 @@ def apply_filters():
 
 
 # %%
+# ATR-based stop parameters (edit and re-run to update chart)
+ATR_WINDOW = 60   # number of 5s bars (e.g., 60 -> 5 minutes)
+ATR_K = 1.5       # multiplier for stop distance
+
+def compute_atr_levels(df: pd.DataFrame, window: int, k: float) -> pd.DataFrame:
+    d = df.copy()
+    # True Range components
+    prev_close = d['close'].shift(1)
+    tr1 = d['high'] - d['low']
+    tr2 = (d['high'] - prev_close).abs()
+    tr3 = (d['low'] - prev_close).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    tr = tr.fillna(tr1)
+
+    atr = tr.ewm(alpha=1/max(window,1), adjust=False).mean()
+    # atr = tr.rolling(window=window, min_periods=1).mean()
+
+    d['atr'] = atr
+    d['sl_long'] = d['close'] - k * atr
+    d['sl_short'] = d['close'] + k * atr
+    return d
+
+# Recompute bars with ATR-based stop levels
+bars = compute_atr_levels(bars, ATR_WINDOW, ATR_K)
+
+# Apply filters and build chart
 PARAMS_HASH = params_options[0]
 STOP_LOSS = stoploss_options[0]
 SIDE = "ALL" # "ALL", "LONG", or "SHORT"

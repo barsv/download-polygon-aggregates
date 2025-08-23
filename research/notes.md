@@ -29,6 +29,7 @@ research:
 -- draw patterns by hand
 - analyze results
 -- plot on chart
+- RTH
 - use ATR
 -- prev year
 -- next year
