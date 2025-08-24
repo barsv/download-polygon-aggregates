@@ -244,18 +244,45 @@ def apply_filters():
 # ATR-based stop parameters (edit and re-run to update chart)
 ATR_WINDOW = 60   # number of 5s bars (e.g., 60 -> 5 minutes)
 ATR_K = 1.5       # multiplier for stop distance
+ATR_CLIP_MODE = 'none'  # 'none' | 'iqr' | 'pctl'
+ATR_CLIP_C = 3.0        # for 'iqr': threshold = median + C * IQR
+ATR_CLIP_Q = 0.95       # for 'pctl': threshold = rolling quantile Q
 
-def compute_atr_levels(df: pd.DataFrame, window: int, k: float) -> pd.DataFrame:
+def compute_atr_levels(
+    df: pd.DataFrame,
+    window: int,
+    k: float,
+    clip_mode: str | None = None,
+    clip_c: float = 3.0,
+    clip_q: float = 0.95,
+) -> pd.DataFrame:
     d = df.copy()
     # True Range components
     prev_close = d['close'].shift(1)
     tr1 = d['high'] - d['low']
     tr2 = (d['high'] - prev_close).abs()
     tr3 = (d['low'] - prev_close).abs()
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    tr = tr.fillna(tr1)
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1).fillna(tr1)
 
-    atr = tr.ewm(alpha=1/max(window,1), adjust=False).mean()
+    # Optional robust clipping of TR to limit effect of spikes
+    tr_used = tr
+    if clip_mode:
+        mode = str(clip_mode).lower()
+        if mode == 'iqr':
+            roll = tr.rolling(window=window, min_periods=1)
+            med = roll.median()
+            q1 = roll.quantile(0.25)
+            q3 = roll.quantile(0.75)
+            iqr = (q3 - q1)
+            thr = (med + clip_c * iqr).fillna(np.inf)
+            tr_used = np.minimum(tr, thr)
+        elif mode == 'pctl':
+            thr = tr.rolling(window=window, min_periods=1).quantile(clip_q).fillna(np.inf)
+            tr_used = np.minimum(tr, thr)
+        else:
+            tr_used = tr
+
+    atr = tr_used.ewm(alpha=1/max(window,1), adjust=False).mean()
     # atr = tr.rolling(window=window, min_periods=1).mean()
 
     d['atr'] = atr
@@ -264,7 +291,12 @@ def compute_atr_levels(df: pd.DataFrame, window: int, k: float) -> pd.DataFrame:
     return d
 
 # Recompute bars with ATR-based stop levels
-bars = compute_atr_levels(bars, ATR_WINDOW, ATR_K)
+bars = compute_atr_levels(
+    bars, ATR_WINDOW, ATR_K,
+    clip_mode=None if ATR_CLIP_MODE == 'none' else ATR_CLIP_MODE,
+    clip_c=ATR_CLIP_C,
+    clip_q=ATR_CLIP_Q,
+)
 
 # Apply filters and build chart
 PARAMS_HASH = params_options[0]
