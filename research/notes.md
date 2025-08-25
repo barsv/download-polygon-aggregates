@@ -29,6 +29,10 @@ research:
 -- draw patterns by hand
 - analyze results
 -- plot on chart
+
+- add sl levels to trades on price chart
+- add exits, duration
+
 - RTH
 - use ATR
 -- prev year
