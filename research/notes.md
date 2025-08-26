@@ -22,22 +22,19 @@ research:
 
 + first test then analyze all points
 
-+ launch all points
-
 - update results_analysis after recalculation of find_similar
--- create visualization of similar points for selected point on to of tSNE
--- draw patterns by hand
-- analyze results
--- plot on chart
+- draw patterns by hand
 
 - add sl levels to trades on price chart
 - add exits, duration
 
+- all similar on one chart with extended endings
+- endings histogram
+- exit stragegy based on deviations
+
 - RTH
 - use ATR
--- prev year
--- next year
-++ create flat csv
-
+- prev year
+- next year
 
 - multithreading
