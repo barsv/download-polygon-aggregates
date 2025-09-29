@@ -21,7 +21,13 @@ def check_env():
 
 def porkbun_post(path: str, payload: dict) -> dict:
     url = f"{API_HOST}{path}"
+    print(f"[DEBUG] POST {url}")
+    print(f"[DEBUG] Payload: {json.dumps({k: v if k not in ('apikey', 'secretapikey') else '***' for k, v in payload.items()})}")
+    
     r = requests.post(url, json=payload, timeout=TIMEOUT)
+    print(f"[DEBUG] Response status: {r.status_code}")
+    print(f"[DEBUG] Response text: {r.text}")
+    
     r.raise_for_status()
     data = r.json()
     if data.get("status") != "SUCCESS":
@@ -34,11 +40,25 @@ def get_public_ipv4() -> str:
     return data["yourIp"]
 
 def retrieve_a_records(domain: str, subdomain: Optional[str]) -> List[dict]:
-    base = f"/dns/retrieveByNameType/{domain}/A"
-    # для корня субдомен в URL пропускаем
-    path = base if not subdomain else f"{base}/{subdomain}"
-    data = porkbun_post(path, {"apikey": API_KEY, "secretapikey": SECRET_KEY})
-    return data.get("records", [])
+    # Try the simpler endpoint first - retrieve all DNS records for the domain
+    try:
+        data = porkbun_post(f"/dns/retrieve/{domain}", {"apikey": API_KEY, "secretapikey": SECRET_KEY})
+        records = data.get("records", [])
+        # Filter for A records and optionally by subdomain
+        a_records = [r for r in records if r.get("type") == "A"]
+        if subdomain:
+            a_records = [r for r in a_records if r.get("name") == f"{subdomain}.{domain}"]
+        else:
+            # For root domain, name should equal domain
+            a_records = [r for r in a_records if r.get("name") == domain]
+        return a_records
+    except Exception as e:
+        print(f"[DEBUG] Failed with retrieve endpoint, trying retrieveByNameType: {e}")
+        # Fallback to original method
+        base = f"/dns/retrieveByNameType/{domain}/A"
+        path = base if not subdomain else f"{base}/{subdomain}"
+        data = porkbun_post(path, {"apikey": API_KEY, "secretapikey": SECRET_KEY})
+        return data.get("records", [])
 
 def edit_a_records(domain: str, subdomain: Optional[str], new_ip: str):
     base = f"/dns/editByNameType/{domain}/A"
@@ -52,14 +72,20 @@ def edit_a_records(domain: str, subdomain: Optional[str], new_ip: str):
 
 def main():
     check_env()
+    
+    # Test authentication first
+    print(f"[INFO] Testing authentication...")
     try:
         current_ip = get_public_ipv4()
+        print(f"[INFO] Authentication successful, public IP: {current_ip}")
     except Exception as e:
-        print(f"[ERR] failed to get public IP: {e}", file=sys.stderr)
+        print(f"[ERR] Authentication failed: {e}", file=sys.stderr)
         sys.exit(1)
 
+    print(f"[INFO] Retrieving DNS records for domain: {DOMAIN}, subdomain: '{SUBDOMAIN}'")
     try:
         records = retrieve_a_records(DOMAIN, SUBDOMAIN or None)
+        print(f"[DEBUG] Found {len(records)} A records: {records}")
     except Exception as e:
         print(f"[ERR] failed to retrieve DNS records: {e}", file=sys.stderr)
         sys.exit(1)
