@@ -5,4 +5,4 @@ sudo chmod 600 ~/src/download-polygon-aggregates/viewer/porkbun/porkbun.env
 sudo chmod +x ~/src/download-polygon-aggregates/viewer/porkbun/run_ddns.sh
 
 # добавим в crontab (от root или нужного пользователя)
-( crontab -l 2>/dev/null; echo '*/1 * * * * ~/src/download-polygon-aggregates/viewer/porkbun/run_ddns.sh >> /var/log/porkbun-ddns.log 2>&1' ) | crontab -
+( crontab -l 2>/dev/null; echo '*/1 * * * * ~/src/download-polygon-aggregates/viewer/porkbun/run_ddns.sh >> ~/src/download-polygon-aggregates/viewer/porkbun/log/porkbun-ddns.log 2>&1' ) | crontab -
