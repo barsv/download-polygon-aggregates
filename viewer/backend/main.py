@@ -38,12 +38,13 @@ async def get_tickers(search: str = None):
     return {"tickers": filtered_tickers[:20]}
 
 @app.get("/api/bars/{ticker}")
-async def get_bars(ticker: str, timestamp: int = None, direction = "", interval: str = "1s"):
+async def get_bars(ticker: str, timestamp: int = None, direction = "", interval: str = "1s", filter_outliers: bool = True):
     """
     Get bars for a ticker with specified interval.
     
     Args:
         interval: Resample rule (e.g., '1s', '5s', '1min', '5min', '1h', '4h', '1d', '1w')
+        filter_outliers: Whether to filter out extreme price changes (bad ticks)
     """
     if not main_service.validate_resample_rule(interval):
         return {"error": f"Unsupported interval: {interval}"}
@@ -61,6 +62,10 @@ async def get_bars(ticker: str, timestamp: int = None, direction = "", interval:
     # Check if data was found
     if df is None:
         return {"error": f"No data found for ticker {ticker}"}
+    
+    # Filter outliers if requested
+    if filter_outliers:
+        df = main_service.filter_outliers(df)
     
     # Rename timestamp column to time for lightweight-charts.js
     df.rename(columns={'timestamp': 'time'}, inplace=True)

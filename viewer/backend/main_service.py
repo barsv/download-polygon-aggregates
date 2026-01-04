@@ -43,6 +43,49 @@ def validate_resample_rule(rule: str) -> bool:
     ]
     return rule in allowed_rules
 
+def filter_outliers(df: pd.DataFrame, max_change_pct: float = 0.10) -> pd.DataFrame:
+    """
+    Replace bars with extreme price changes (bad ticks) with flat bars.
+    
+    Args:
+        df: DataFrame with OHLC data
+        max_change_pct: Maximum allowed price change between bars (default 10% = 0.10)
+    
+    Returns:
+        DataFrame with outliers replaced by flat bars (O=H=L=C=prev_close)
+    """
+    if df is None or len(df) < 2:
+        return df
+    
+    df = df.copy()
+    
+    # Detect bar-to-bar outliers (compare close to previous close)
+    price_change = df['close'].pct_change()
+    bar_to_bar_outlier = (price_change > max_change_pct) | (price_change < -max_change_pct)
+    
+    # Detect within-bar outliers (high/low deviates too much from open/close)
+    bar_max = df[['open', 'close']].max(axis=1)
+    bar_min = df[['open', 'close']].min(axis=1)
+    high_outlier = (df['high'] / bar_max) > (1 + max_change_pct)
+    low_outlier = (df['low'] / bar_min) < (1 - max_change_pct)
+    within_bar_outlier = high_outlier | low_outlier
+    
+    # Combine both types of outliers
+    is_outlier = bar_to_bar_outlier | within_bar_outlier
+    
+    # Replace outlier bars with flat bars (O=H=L=C=prev_close)
+    if is_outlier.any():
+        prev_close = df['close'].shift(1)
+        # For first bar, use its own open as fallback
+        prev_close.fillna(df['open'], inplace=True)
+        
+        df.loc[is_outlier, 'open'] = prev_close[is_outlier]
+        df.loc[is_outlier, 'high'] = prev_close[is_outlier]
+        df.loc[is_outlier, 'low'] = prev_close[is_outlier]
+        df.loc[is_outlier, 'close'] = prev_close[is_outlier]
+    
+    return df
+
 def aggregate_ohlc_data(df: pd.DataFrame, resample_rule: str) -> pd.DataFrame:
     """
     Universal OHLC aggregation function.
