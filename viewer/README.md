@@ -10,7 +10,7 @@ Prereqs
 - Frontend deps: `cd viewer/frontend && npm install`.
 
 Run
-- Backend: `python -m uvicorn viewer.backend.main:app --reload --port 8000`
+- Backend: `cd viewer/backend && python -m uvicorn main:app --reload --port 8000`
 - Frontend: `cd viewer/frontend && npm run dev`
 - Vite dev server proxies `/api` → `http://localhost:8000` (see `vite.config.ts`).
 
