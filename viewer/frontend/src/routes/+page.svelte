@@ -321,10 +321,12 @@
         <option value="1d">1 Day</option>
         <option value="1w">1 Week</option>
       </select>
-      <label class="checkbox-label">
-        <input type="checkbox" bind:checked={filterOutliers} onchange={onTickerChange} />
-        Filter outliers
-      </label>
+      {#if ['1s', '5s', '10s', '15s', '30s'].includes(interval)}
+        <label class="checkbox-label">
+          <input type="checkbox" bind:checked={filterOutliers} onchange={onTickerChange} />
+          Filter outliers
+        </label>
+      {/if}
       {#if loading}
         <div class="status-indicator">Loading...</div>
       {:else if error}

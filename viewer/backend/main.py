@@ -53,19 +53,15 @@ async def get_bars(ticker: str, timestamp: int = None, direction = "", interval:
     interval_seconds = main_service.resample_rule_to_seconds(interval)
     
     if interval_seconds < 60:
-        # Use seconds data
-        df = main_service.get_aggregated_seconds_df(ticker, interval, timestamp, direction)
+        # Use seconds data - filter outliers if requested
+        df = main_service.get_aggregated_seconds_df(ticker, interval, timestamp, direction, filter_outliers)
     else:
-        # Use minutes data
+        # Use minutes data - already filtered outliers during aggregation
         df = main_service.get_aggregated_minutes_df(ticker, interval, timestamp, direction)
     
     # Check if data was found
     if df is None:
         return {"error": f"No data found for ticker {ticker}"}
-    
-    # Filter outliers if requested
-    if filter_outliers:
-        df = main_service.filter_outliers(df)
     
     # Rename timestamp column to time for lightweight-charts.js
     df.rename(columns={'timestamp': 'time'}, inplace=True)

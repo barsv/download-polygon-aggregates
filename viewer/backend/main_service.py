@@ -7,6 +7,7 @@ import pyarrow.parquet as pq
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import settings
+from filter_outliers import filter_outliers
 
 # aggregate_bars creates the 1-minute bars from 1-second bars
 from aggregate_bars import aggregate_bars
@@ -42,49 +43,6 @@ def validate_resample_rule(rule: str) -> bool:
         '1d', '1w'
     ]
     return rule in allowed_rules
-
-def filter_outliers(df: pd.DataFrame, max_change_pct: float = 0.10) -> pd.DataFrame:
-    """
-    Replace bars with extreme price changes (bad ticks) with flat bars.
-    
-    Args:
-        df: DataFrame with OHLC data
-        max_change_pct: Maximum allowed price change between bars (default 10% = 0.10)
-    
-    Returns:
-        DataFrame with outliers replaced by flat bars (O=H=L=C=prev_close)
-    """
-    if df is None or len(df) < 2:
-        return df
-    
-    df = df.copy()
-    
-    # Detect bar-to-bar outliers (compare close to previous close)
-    price_change = df['close'].pct_change()
-    bar_to_bar_outlier = (price_change > max_change_pct) | (price_change < -max_change_pct)
-    
-    # Detect within-bar outliers (high/low deviates too much from open/close)
-    bar_max = df[['open', 'close']].max(axis=1)
-    bar_min = df[['open', 'close']].min(axis=1)
-    high_outlier = (df['high'] / bar_max) > (1 + max_change_pct)
-    low_outlier = (df['low'] / bar_min) < (1 - max_change_pct)
-    within_bar_outlier = high_outlier | low_outlier
-    
-    # Combine both types of outliers
-    is_outlier = bar_to_bar_outlier | within_bar_outlier
-    
-    # Replace outlier bars with flat bars (O=H=L=C=prev_close)
-    if is_outlier.any():
-        prev_close = df['close'].shift(1)
-        # For first bar, use its own open as fallback
-        prev_close.fillna(df['open'], inplace=True)
-        
-        df.loc[is_outlier, 'open'] = prev_close[is_outlier]
-        df.loc[is_outlier, 'high'] = prev_close[is_outlier]
-        df.loc[is_outlier, 'low'] = prev_close[is_outlier]
-        df.loc[is_outlier, 'close'] = prev_close[is_outlier]
-    
-    return df
 
 def aggregate_ohlc_data(df: pd.DataFrame, resample_rule: str) -> pd.DataFrame:
     """
@@ -192,7 +150,7 @@ def get_aggregated_minutes_df(ticker: str, interval: str, timestamp: int = None,
         df_result = df_result.iloc[1:]
     return df_result
 
-def get_aggregated_seconds_df(ticker: str, interval: str, timestamp: int = None, direction: str = "both") -> pd.DataFrame:
+def get_aggregated_seconds_df(ticker: str, interval: str, timestamp: int = None, direction: str = "both", remove_outliers: bool = False) -> pd.DataFrame:
     """Load second bars and aggregate to specified interval on-the-fly."""
     # simplified logic - load from one file. if it will be on the year boundary we will return whatever there is up to 
     # the edge. and the next ajax will load from the next file.
@@ -229,6 +187,9 @@ def get_aggregated_seconds_df(ticker: str, interval: str, timestamp: int = None,
             start_idx = max(0, idx - second_limit // 2)
             end_idx = min(len(df), idx + second_limit // 2)
             df = df.iloc[start_idx:end_idx]
+    # filter outliers
+    if remove_outliers:
+        df = filter_outliers(df)
     # resample
     if interval == '1s':
         # skip resampling (already 1-second data)
