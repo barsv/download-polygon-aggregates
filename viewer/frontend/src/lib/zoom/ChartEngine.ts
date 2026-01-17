@@ -120,7 +120,7 @@ export class ChartEngine {
         const { width, height, ctx } = this;
 
         // Clear background
-        ctx.fillStyle = "#0f0f12"; // Deep black/dark purple-ish background
+        ctx.fillStyle = "#1e1e1e";
         ctx.fillRect(0, 0, width, height);
 
         if (this.bars.length === 0) return;
@@ -133,12 +133,8 @@ export class ChartEngine {
         ctx.rect(this.padding.left, this.padding.top, drawAreaWidth, drawAreaHeight);
         ctx.clip();
 
-        // 1. Draw Range Area (High - Low) with vertical gradient
-        const areaGradient = ctx.createLinearGradient(0, this.padding.top, 0, this.padding.top + drawAreaHeight);
-        areaGradient.addColorStop(0, "rgba(74, 144, 226, 0.25)");
-        areaGradient.addColorStop(1, "rgba(74, 144, 226, 0.02)");
-
-        ctx.fillStyle = areaGradient;
+        // 1. Draw Range Area (High - Low)
+        ctx.fillStyle = "rgba(74, 144, 226, 0.1)";
         ctx.beginPath();
 
         let first = true;
@@ -163,13 +159,11 @@ export class ChartEngine {
         ctx.closePath();
         ctx.fill();
 
-        // 2. Draw Close Line with glow
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = "rgba(74, 144, 226, 0.8)";
-        ctx.strokeStyle = "#4a90e2"; // Vibrant blue
-        ctx.lineWidth = 2.5;
-        ctx.lineJoin = "round";
-        ctx.lineCap = "round";
+        // 2. Draw Close Line
+        ctx.strokeStyle = "#4a90e2";
+        ctx.lineWidth = 1.5;
+        ctx.lineJoin = "miter";
+        ctx.lineCap = "butt";
 
         ctx.beginPath();
         first = true;
@@ -184,9 +178,6 @@ export class ChartEngine {
             }
         }
         ctx.stroke();
-
-        // Reset shadow for further drawing
-        ctx.shadowBlur = 0;
 
         ctx.restore();
 
