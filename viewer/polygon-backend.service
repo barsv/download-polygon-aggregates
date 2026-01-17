@@ -1,0 +1,13 @@
+[Unit]
+Description=Polygon Aggregates Backend
+After=network.target
+
+[Service]
+Type=simple
+User=stan
+WorkingDirectory=/home/stan/src/download-polygon-aggregates/viewer/backend
+ExecStart=/home/stan/src/download-polygon-aggregates/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
