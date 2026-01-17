@@ -68,6 +68,42 @@ async def get_bars(ticker: str, timestamp: int = None, direction = "", interval:
     result = {"ticker": ticker, "bars": df.to_dict(orient='records')}
     return result
 
+@app.get("/api/viewport/{ticker}")
+async def get_viewport(ticker: str, start_timestamp: int, end_timestamp: int, screen_width_pixels: int):
+    """
+    Get aggregated data for a specific viewport.
+    """
+    df = main_service.get_viewport_data(ticker, start_timestamp, end_timestamp, screen_width_pixels)
+    if df is None:
+         return {"error": f"No data found for {ticker} in range {start_timestamp}-{end_timestamp}"}
+         
+    # Return simplified structure as planned: timestamp, open, high, low, close
+    # Frontend handles the visualization (line for close, area for high-low)
+    
+    # We rename timestamp to 'time' for consistency, although new frontend could accept anything.
+    if 'timestamp' in df.columns:
+         df.rename(columns={'timestamp': 'time'}, inplace=True)
+         
+    # Handle the "index is timestamp" case if it happened? 
+    # aggregate_ohlc_data ensures timestamp is a column at 0. So we are good.
+    
+    # We can omit open if we only want High-Low-Close. But let's keep OHLC for now, it's cheap.
+    result = {"ticker": ticker, "bars": df.to_dict(orient='records')}
+    return result
+
+@app.get("/api/meta/{ticker}")
+async def get_ticker_meta(ticker: str):
+    """
+    Get metadata for a ticker, specifically the last available timestamp.
+    """
+    last_ts = main_service.get_last_timestamp(ticker)
+    return {
+        "ticker": ticker,
+        "last_timestamp": last_ts
+    }
+
+
+
 @app.get("/api/download/files/{ticker}")
 async def get_download_files(ticker: str, interval: str = "1s"):
     if not main_service.validate_resample_rule(interval):
