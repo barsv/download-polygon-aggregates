@@ -216,44 +216,22 @@ def get_viewport_data(ticker: str, start_timestamp: int, end_timestamp: int, scr
     seconds_per_pixel = range_duration / screen_width_pixels
     
     # Determine resolution
-    # Thresholds:
-    # < 10 sec/px -> 1s data
-    # < 5 min/px  -> 1min data (aggregated from 1min if needed, or raw 1min)
-    # < 2 hours/px -> 1h data
-    # >= 2 hours/px -> 1d data
-    
-    # We call existing functions but with a twist: they usually return BARS_RETURN_LIIMIT bars.
-    # Here we want a specific range [start, end].
-    # So we might need to adjust or create new logic, or trick existing functions.
-    # Existing get_aggregated_minutes_df/seconds_df logic is heavily tied to "timestamp + direction" or "tail".
-    # It doesn't support "start -> end" explicitly.
-    
-    # Let's create a custom loader for specific range to avoid hacking the existing ones too much.
-    # But reuse the aggregation logic.
-    
     if seconds_per_pixel < 1:
         interval = "1s"
         source = "seconds"
     elif seconds_per_pixel < 60:
-         # e.g. 30s per pixel. 1s data is too much (30 bars per pixel).
-         # aggregate 1s data to something larger? No, "1min" data is better?
-         # If 1s/px < density < 60s/px, we want visible bars. 
-         # If we use 1min bars, they will be > 1px wide.
-         # Let's stick to:
-         interval = "1s" # or aggregated seconds?
+         interval = "1s"
          source = "seconds"
-    elif seconds_per_pixel < 3600: # < 1h per pixel
+    elif seconds_per_pixel < 3600:
          interval = "1min"
          source = "minutes"
-    elif seconds_per_pixel < 86400: # < 1d per pixel
+    elif seconds_per_pixel < 86400:
          interval = "1h"
          source = "minutes"
     else:
          interval = "1d"
          source = "minutes"
          
-    # Optimization: if range is huge, don't try to load seconds.
-    
     # Optimization: if range is huge, don't try to load seconds.
     
     # Standard buffer for smooth panning (50%)
@@ -299,65 +277,36 @@ def get_viewport_data(ticker: str, start_timestamp: int, end_timestamp: int, scr
                     pass
         if dfs:
             df = pd.concat(dfs)
+            
+    if df is None or df.empty:
+        return None
+        
+    # Aggregate if needed to keep point count sane
     
-    # --- Smart Border Logic ---
-    try:
-        # Ensure we have at least one point before start and one point after end
-        # to allow the chart to draw connecting lines across gaps (weekends, etc.)
+    # Map seconds_per_pixel to a pandas resample rule
+    if seconds_per_pixel < 1:
+        agg_rule = "1s"
+    elif seconds_per_pixel < 5:
+        agg_rule = "5s"
+    elif seconds_per_pixel < 10:
+        agg_rule = "10s"
+    elif seconds_per_pixel < 60:
+        agg_rule = "1min"
+    elif seconds_per_pixel < 300:
+        agg_rule = "5min"
+    elif seconds_per_pixel < 1800:
+        agg_rule = "30min"
+    elif seconds_per_pixel < 3600:
+        agg_rule = "1h"
+    elif seconds_per_pixel < 14400: # 4h
+        agg_rule = "4h"
+    elif seconds_per_pixel < 86400: # 1d
+        agg_rule = "1d"
+    else:
+        agg_rule = "1w" # or higher?
         
-        left_anchor = None
-        right_anchor = None
-        
-        # Helper to get first/last timestamp
-        def get_ts(d, pos):
-            if 'timestamp' in d.columns:
-                return d['timestamp'].iloc[pos]
-            else:
-                return d.index[pos]
-
-        # Check Left
-        if df is None or df.empty or get_ts(df, 0) > start_timestamp:
-            left_anchor = find_anchor_point(ticker, start_timestamp, 'backward')
-            
-        # Check Right
-        if df is None or df.empty or get_ts(df, -1) < end_timestamp:
-            right_anchor = find_anchor_point(ticker, end_timestamp, 'forward')
-            
-        # Combine
-        parts = []
-        if left_anchor is not None: 
-            parts.append(left_anchor)
-        if df is not None and not df.empty:
-            # Ensure timestamp is a column for concatenation if it's currently index
-            if 'timestamp' not in df.columns and df.index.name == 'timestamp':
-                 df = df.reset_index()
-            parts.append(df)
-        if right_anchor is not None:
-             # Anchor points usually come as DFs. Ensure they have timestamp col too.
-             if 'timestamp' not in right_anchor.columns and right_anchor.index.name == 'timestamp':
-                 right_anchor = right_anchor.reset_index()
-             parts.append(right_anchor)
-             
-        # Also clean left anchor
-        if left_anchor is not None:
-             if 'timestamp' not in left_anchor.columns and left_anchor.index.name == 'timestamp':
-                 left_anchor = left_anchor.reset_index()
-
-        if parts:
-            df = pd.concat(parts)
-            # Normalize for downstream
-            if 'timestamp' not in df.columns and df.index.name == 'timestamp':
-                df = df.reset_index()
-            df = df.drop_duplicates(subset='timestamp').sort_values('timestamp')
-        else:
-            return None
-    except Exception as e:
-        import traceback
-        with open('error.log', 'w') as f:
-            f.write(traceback.format_exc())
-        raise e
-
-
+    df_agg = aggregate_ohlc_data(df, agg_rule)
+    return df_agg
 
 def get_last_timestamp(ticker: str) -> int:
     """

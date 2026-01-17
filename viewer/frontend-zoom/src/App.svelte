@@ -47,9 +47,13 @@
               // If ticker present but no time, reset to latest
               await resetToLatest();
           } else {
-             // Default behavior
+             // Default behavior: try AAPL first, otherwise take the first in list
              if (tickers.length > 0) {
-                 selectedTicker = tickers[0];
+                 if (tickers.includes("AAPL")) {
+                     selectedTicker = "AAPL";
+                 } else {
+                     selectedTicker = tickers[0];
+                 }
              }
              await resetToLatest();
           }
