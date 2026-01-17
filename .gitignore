@@ -9,3 +9,5 @@ tmp.txt
 **/data
 research/pyfiles/**
 **/logs
+**/*.env
+**/log/*
