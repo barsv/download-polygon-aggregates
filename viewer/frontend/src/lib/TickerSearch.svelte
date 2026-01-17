@@ -91,11 +91,30 @@
 </div>
 
 <style>
+  .ticker-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
   .ticker-search input {
-    padding: 8px;
+    padding: 8px 12px;
     font-size: 14px;
-    width: 100px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+    width: 140px;
+    background: rgba(255, 255, 255, 0.05);
+    color: inherit;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    outline: none;
+    transition: all 0.2s ease;
+    font-weight: 500;
+  }
+  .ticker-search input:focus {
+    border-color: #4a90e2;
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+    width: 180px;
+  }
+  .ticker-search input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
   }
 </style>

@@ -120,7 +120,7 @@ export class ChartEngine {
         const { width, height, ctx } = this;
 
         // Clear background
-        ctx.fillStyle = "#1e1e1e"; // Dark slate
+        ctx.fillStyle = "#0f0f12"; // Deep black/dark purple-ish background
         ctx.fillRect(0, 0, width, height);
 
         if (this.bars.length === 0) return;
@@ -128,14 +128,19 @@ export class ChartEngine {
         // Clip to drawing area
         ctx.save();
         ctx.beginPath();
-        ctx.rect(this.padding.left, this.padding.top, width - this.padding.right - this.padding.left, height - this.padding.bottom - this.padding.top);
+        const drawAreaWidth = width - this.padding.right - this.padding.left;
+        const drawAreaHeight = height - this.padding.bottom - this.padding.top;
+        ctx.rect(this.padding.left, this.padding.top, drawAreaWidth, drawAreaHeight);
         ctx.clip();
 
-        // 1. Draw Range Area (High - Low)
-        ctx.fillStyle = "rgba(41, 98, 255, 0.2)"; // TradingView-ish blue, transparent
+        // 1. Draw Range Area (High - Low) with vertical gradient
+        const areaGradient = ctx.createLinearGradient(0, this.padding.top, 0, this.padding.top + drawAreaHeight);
+        areaGradient.addColorStop(0, "rgba(74, 144, 226, 0.25)");
+        areaGradient.addColorStop(1, "rgba(74, 144, 226, 0.02)");
+
+        ctx.fillStyle = areaGradient;
         ctx.beginPath();
 
-        // Move to first point low
         let first = true;
         for (const bar of this.bars) {
             const x = this.timeToPixel(bar.time);
@@ -148,7 +153,6 @@ export class ChartEngine {
             }
         }
 
-        // Loop back for Highs (reverse order)
         for (let i = this.bars.length - 1; i >= 0; i--) {
             const bar = this.bars[i];
             const x = this.timeToPixel(bar.time);
@@ -159,9 +163,14 @@ export class ChartEngine {
         ctx.closePath();
         ctx.fill();
 
-        // 2. Draw Close Line
-        ctx.strokeStyle = "#2962ff";
-        ctx.lineWidth = 2;
+        // 2. Draw Close Line with glow
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = "rgba(74, 144, 226, 0.8)";
+        ctx.strokeStyle = "#4a90e2"; // Vibrant blue
+        ctx.lineWidth = 2.5;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+
         ctx.beginPath();
         first = true;
         for (const bar of this.bars) {
@@ -176,6 +185,9 @@ export class ChartEngine {
         }
         ctx.stroke();
 
+        // Reset shadow for further drawing
+        ctx.shadowBlur = 0;
+
         ctx.restore();
 
         // 3. Draw Axes
@@ -185,7 +197,7 @@ export class ChartEngine {
 
     drawXAxis() {
         const { ctx, width, height } = this;
-        ctx.strokeStyle = "#444";
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
         ctx.lineWidth = 1;
 
         const y = height - this.padding.bottom;
@@ -217,8 +229,8 @@ export class ChartEngine {
         // Align start
         let t = Math.ceil(this.startTime / step) * step;
 
-        ctx.fillStyle = "#888";
-        ctx.font = "10px sans-serif";
+        ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+        ctx.font = "11px 'Inter', sans-serif";
         ctx.textAlign = "center";
 
         while (t <= this.endTime) {
@@ -244,7 +256,7 @@ export class ChartEngine {
 
     drawYAxis() {
         const { ctx, width, height } = this;
-        ctx.strokeStyle = "#444";
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
         ctx.beginPath();
         const x = width - this.padding.right;
         ctx.moveTo(x, this.padding.top);
@@ -262,8 +274,8 @@ export class ChartEngine {
 
         let p = Math.ceil(this.minPrice / niceStep) * niceStep;
 
-        ctx.fillStyle = "#888";
-        ctx.font = "10px sans-serif";
+        ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+        ctx.font = "11px 'Inter', sans-serif";
         ctx.textAlign = "left";
 
         while (p <= this.maxPrice) {
@@ -278,7 +290,7 @@ export class ChartEngine {
 
                 // Grid line
                 ctx.save();
-                ctx.strokeStyle = "#2c2c2c";
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
                 ctx.setLineDash([2, 4]);
                 ctx.beginPath();
                 ctx.moveTo(this.padding.left, y);

@@ -2,9 +2,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import CanvasChart from '$lib/zoom/CanvasChart.svelte';
-  import { fetchTickers, fetchViewportData, fetchTickerMeta, type Bar } from '$lib/zoom/api';
+  import { fetchViewportData, fetchTickerMeta, type Bar } from '$lib/zoom/api';
+  import TickerSearch from '$lib/TickerSearch.svelte';
 
-  let tickers: string[] = [];
   let selectedTicker = "AAPL";
   let bars: Bar[] = [];
   
@@ -22,45 +22,37 @@
   
   let abortController: AbortController | null = null;
   
-  onMount(async () => {
-      try {
-          tickers = await fetchTickers();
-          
-          // Check URL params
-          const params = new URLSearchParams(window.location.search);
-          const urlTicker = params.get('ticker');
-          const urlFrom = params.get('from');
-          const urlTo = params.get('to');
-          
-          if (urlTicker && tickers.includes(urlTicker)) {
-              selectedTicker = urlTicker;
-              if (urlFrom && urlTo) {
-                   const f = parseFloat(urlFrom);
-                   const t = parseFloat(urlTo);
-                   if (!isNaN(f) && !isNaN(t) && t > f) {
-                       startTime = f;
-                       endTime = t;
-                       await loadData();
-                       return;
-                   }
-              }
-              // If ticker present but no time, reset to latest
+   onMount(async () => {
+       try {
+           // Check URL params
+           const params = new URLSearchParams(window.location.search);
+           const urlTicker = params.get('ticker');
+           const urlFrom = params.get('from');
+           const urlTo = params.get('to');
+           
+           if (urlTicker) {
+               selectedTicker = urlTicker;
+               if (urlFrom && urlTo) {
+                    const f = parseFloat(urlFrom);
+                    const t = parseFloat(urlTo);
+                    if (!isNaN(f) && !isNaN(t) && t > f) {
+                        startTime = f;
+                        endTime = t;
+                        await loadData();
+                        return;
+                    }
+               }
+               // If ticker present but no time, reset to latest
+               await resetToLatest();
+           } else {
+              // Default behavior: AAPL
+              selectedTicker = "AAPL";
               await resetToLatest();
-          } else {
-             // Default behavior: try AAPL first, otherwise take the first in list
-             if (tickers.length > 0) {
-                 if (tickers.includes("AAPL")) {
-                     selectedTicker = "AAPL";
-                 } else {
-                     selectedTicker = tickers[0];
-                 }
-             }
-             await resetToLatest();
-          }
-      } catch (e) {
-          error = "Failed to load tickers";
-      }
-  });
+           }
+       } catch (e) {
+           error = "Failed to initialize";
+       }
+   });
 
   function updateUrl() {
       const params = new URLSearchParams();
@@ -143,30 +135,42 @@
       }
   }
   
-  function onTickerChange() {
-      // When changing ticker, we should probably reset to its latest data
-      resetToLatest();
-  }
+   function onTickerChange(newTicker: string) {
+       selectedTicker = newTicker;
+       resetToLatest();
+   }
 </script>
+
+<svelte:head>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <title>Infinite Zoom | {selectedTicker}</title>
+</svelte:head>
 
 <main>
     <div class="toolbar">
-        <div class="left-controls">
-            <select bind:value={selectedTicker} on:change={onTickerChange}>
-                {#each tickers as ticker}
-                    <option value={ticker}>{ticker}</option>
-                {/each}
-            </select>
-            
-            <div class="info">
-                <span>Frame: {(endTime - startTime).toFixed(0)}s</span>
-                {#if isLoading} <span class="loading">Loading...</span> {/if}
-                {#if error} <span class="error">{error}</span> {/if}
+        <div class="toolbar-content">
+            <div class="left-controls">
+                <div class="logo">
+                     <span class="logo-text">INFINITE</span>
+                     <span class="logo-sub">ZOOM</span>
+                </div>
+                <TickerSearch value={selectedTicker} onchange={onTickerChange} />
+                
+                <div class="info">
+                    <span class="pill">{(endTime - startTime).toFixed(0)}s</span>
+                    {#if isLoading} <span class="loading-indicator"></span> {/if}
+                    {#if error} <span class="error">{error}</span> {/if}
+                </div>
             </div>
-        </div>
 
-        <div class="right-controls">
-            <a href="/?ticker={selectedTicker}" class="nav-link">Standard View</a>
+            <div class="right-controls">
+                <a href="/?ticker={selectedTicker}" class="nav-link">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                    Standard View
+                </a>
+            </div>
         </div>
     </div>
     
@@ -179,10 +183,10 @@
     :global(body) {
         margin: 0;
         padding: 0;
-        background: #1e1e1e;
-        color: #ddd;
-        font-family: sans-serif;
-        overflow: hidden; /* No scrollbars on body */
+        background: #0f0f12;
+        color: #e0e0e0;
+        font-family: 'Inter', sans-serif;
+        overflow: hidden;
         width: 100%;
         height: 100%;
     }
@@ -193,40 +197,76 @@
         display: flex;
         flex-direction: column;
         height: 100vh;
-        width: 100%; /* Fix: 100vw can cause overflow with scrollbars */
+        width: 100%;
     }
     .toolbar {
-        padding: 10px;
-        background: #252526;
-        border-bottom: 1px solid #333;
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: calc(100% - 40px);
+        max-width: 1200px;
+        z-index: 100;
+        pointer-events: none;
+    }
+    .toolbar-content {
+        background: rgba(30, 30, 35, 0.7);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 8px 16px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        z-index: 10;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        flex-shrink: 0;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        pointer-events: auto;
     }
     .left-controls {
         display: flex;
         align-items: center;
-        gap: 20px;
+        gap: 24px;
+    }
+    .logo {
+        display: flex;
+        flex-direction: column;
+        line-height: 1;
+        margin-right: 10px;
+    }
+    .logo-text {
+        font-weight: 800;
+        font-size: 14px;
+        letter-spacing: 1px;
+        color: #4a90e2;
+    }
+    .logo-sub {
+        font-size: 10px;
+        font-weight: 400;
+        color: #888;
+        letter-spacing: 2.5px;
     }
     .right-controls {
         display: flex;
         align-items: center;
-        gap: 15px;
     }
     .nav-link {
         text-decoration: none;
-        color: #4a90e2;
+        color: #fff;
         font-weight: 500;
-        font-size: 14px;
-        padding: 6px 12px;
-        border-radius: 4px;
-        transition: background-color 0.2s;
+        font-size: 13px;
+        padding: 8px 16px;
+        border-radius: 8px;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
     }
     .nav-link:hover {
-        background-color: rgba(74, 144, 226, 0.1);
+        background: rgba(74, 144, 226, 0.15);
+        border-color: rgba(74, 144, 226, 0.3);
+        transform: translateY(-1px);
     }
     .chart-wrapper {
         flex-grow: 1;
@@ -234,18 +274,33 @@
         min-height: 0;
         width: 100%;
     }
-    select {
-        background: #333;
-        color: white;
-        border: 1px solid #555;
-        padding: 5px;
-        font-size: 14px;
+    .info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
     }
-    .loading {
-        color: #eca529;
-        font-size: 0.8em;
+    .pill {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        color: #aaa;
+        font-variant-numeric: tabular-nums;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .loading-indicator {
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(74, 144, 226, 0.3);
+        border-top-color: #4a90e2;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
     }
     .error {
         color: #ff5555;
+        font-size: 12px;
     }
 </style>
