@@ -27,6 +27,7 @@
   $effect(updateSecondsVisible);
   let noMoreBackward = $state(false);
   let noMoreForward = $state(false);
+  let filterOutliers = $state(true);
 
   onMount(() => {
     if (!chartContainer) return;
@@ -141,6 +142,9 @@
       
       // Use interval directly in API call
       params.append('interval', interval);
+      
+      // Add filter_outliers parameter
+      params.append('filter_outliers', filterOutliers.toString());
       
       if (params.toString()) {
         url += `?${params.toString()}`;
@@ -317,6 +321,12 @@
         <option value="1d">1 Day</option>
         <option value="1w">1 Week</option>
       </select>
+      {#if ['1s', '5s', '10s', '15s', '30s'].includes(interval)}
+        <label class="checkbox-label">
+          <input type="checkbox" bind:checked={filterOutliers} onchange={onTickerChange} />
+          Filter outliers
+        </label>
+      {/if}
       {#if loading}
         <div class="status-indicator">Loading...</div>
       {:else if error}
@@ -352,6 +362,19 @@
     display: flex;
     align-items: center;
     gap: 10px;
+  }
+
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 14px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .checkbox-label input[type="checkbox"] {
+    cursor: pointer;
   }
 
   .status-indicator {

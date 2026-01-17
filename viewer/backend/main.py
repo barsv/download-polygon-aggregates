@@ -38,12 +38,13 @@ async def get_tickers(search: str = None):
     return {"tickers": filtered_tickers[:20]}
 
 @app.get("/api/bars/{ticker}")
-async def get_bars(ticker: str, timestamp: int = None, direction = "", interval: str = "1s"):
+async def get_bars(ticker: str, timestamp: int = None, direction = "", interval: str = "1s", filter_outliers: bool = True):
     """
     Get bars for a ticker with specified interval.
     
     Args:
         interval: Resample rule (e.g., '1s', '5s', '1min', '5min', '1h', '4h', '1d', '1w')
+        filter_outliers: Whether to filter out extreme price changes (bad ticks)
     """
     if not main_service.validate_resample_rule(interval):
         return {"error": f"Unsupported interval: {interval}"}
@@ -52,10 +53,10 @@ async def get_bars(ticker: str, timestamp: int = None, direction = "", interval:
     interval_seconds = main_service.resample_rule_to_seconds(interval)
     
     if interval_seconds < 60:
-        # Use seconds data
-        df = main_service.get_aggregated_seconds_df(ticker, interval, timestamp, direction)
+        # Use seconds data - filter outliers if requested
+        df = main_service.get_aggregated_seconds_df(ticker, interval, timestamp, direction, filter_outliers)
     else:
-        # Use minutes data
+        # Use minutes data - already filtered outliers during aggregation
         df = main_service.get_aggregated_minutes_df(ticker, interval, timestamp, direction)
     
     # Check if data was found
@@ -66,6 +67,42 @@ async def get_bars(ticker: str, timestamp: int = None, direction = "", interval:
     df.rename(columns={'timestamp': 'time'}, inplace=True)
     result = {"ticker": ticker, "bars": df.to_dict(orient='records')}
     return result
+
+@app.get("/api/viewport/{ticker}")
+async def get_viewport(ticker: str, start_timestamp: int, end_timestamp: int, screen_width_pixels: int):
+    """
+    Get aggregated data for a specific viewport.
+    """
+    df = main_service.get_viewport_data(ticker, start_timestamp, end_timestamp, screen_width_pixels)
+    if df is None:
+         return {"error": f"No data found for {ticker} in range {start_timestamp}-{end_timestamp}"}
+         
+    # Return simplified structure as planned: timestamp, open, high, low, close
+    # Frontend handles the visualization (line for close, area for high-low)
+    
+    # We rename timestamp to 'time' for consistency, although new frontend could accept anything.
+    if 'timestamp' in df.columns:
+         df.rename(columns={'timestamp': 'time'}, inplace=True)
+         
+    # Handle the "index is timestamp" case if it happened? 
+    # aggregate_ohlc_data ensures timestamp is a column at 0. So we are good.
+    
+    # We can omit open if we only want High-Low-Close. But let's keep OHLC for now, it's cheap.
+    result = {"ticker": ticker, "bars": df.to_dict(orient='records')}
+    return result
+
+@app.get("/api/meta/{ticker}")
+async def get_ticker_meta(ticker: str):
+    """
+    Get metadata for a ticker, specifically the last available timestamp.
+    """
+    last_ts = main_service.get_last_timestamp(ticker)
+    return {
+        "ticker": ticker,
+        "last_timestamp": last_ts
+    }
+
+
 
 @app.get("/api/download/files/{ticker}")
 async def get_download_files(ticker: str, interval: str = "1s"):
