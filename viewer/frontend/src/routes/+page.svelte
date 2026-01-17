@@ -120,8 +120,12 @@
   });
 
   async function init() {
+    // Check URL params for ticker
+    const params = new URLSearchParams(window.location.search);
+    const urlTicker = params.get('ticker');
+    
     // Set default ticker
-    const defaultTicker = 'AAPL';
+    const defaultTicker = urlTicker || 'AAPL';
     selectedTicker = defaultTicker;
     await onTickerChange();
   }
@@ -334,6 +338,7 @@
       {/if}
     </div>
     <div class="right-controls">
+      <a href="/zoom?ticker={selectedTicker}" class="nav-link">Infinite Zoom</a>
       <button onclick={openDownloadPage} class="download-button">Download</button>
     </div>
   </div>
@@ -384,9 +389,28 @@
   .error {
     color: red;
   }
-
   .chart-container {
     flex-grow: 1;
     width: 100%;
+  }
+
+  .right-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+  
+  .nav-link {
+    text-decoration: none;
+    color: #4a90e2;
+    font-weight: 500;
+    font-size: 14px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+  }
+  
+  .nav-link:hover {
+    background-color: rgba(74, 144, 226, 0.1);
   }
 </style>
