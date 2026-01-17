@@ -80,11 +80,33 @@ The viewer is located in the `viewer/` directory and has a separate frontend and
 *   **Backend:**
     *   **Framework:** FastAPI (Python).
     *   **Location:** `viewer/backend/main.py`.
+    *   **Service Logic**: `viewer/backend/main_service.py` handles data loading and viewport aggregation.
+    *   **Running Backend**: Execute from project root: `export PYTHONPATH=$PYTHONPATH:$(pwd)/viewer/backend && python3 -m uvicorn main:app --port 8000 --app-dir viewer/backend`.
+    *   **Data Availability**: In dev environment, only some tickers (AAPL, SPY) have full data. Others (like NVDA) may return "No data" even if they are in the ticker list.
     *   **APIs:**
-        *   `/api/tickers`: Provides a list of all available tickers, sorted by market cap. It lazy-loads `ticker_details.csv` on the first request.
-        *   `/api/bars/{ticker}`: Provides bar data for a given ticker. It accepts `from_timestamp` and `to_timestamp` query parameters to fetch data for specific time ranges. It intelligently reads only the necessary yearly `.parquet` files based on the requested range. For the initial load, it returns the last 2000 data points from the most recent year.
+        *   `/api/tickers`: Sorted by market cap.
+        *   `/api/bars/{ticker}`: Used by Standard Viewer (Lightweight Charts).
+        *   `/api/viewport/{ticker}`: Used by Infinite Zoom for high-resolution canvas rendering.
 
 *   **Frontend:**
-    *   **Framework:** Svelte with `lightweight-charts`.
-    *   **Location:** `viewer/frontend/src/App.svelte`.
-    *   **Functionality:** Displays candlestick charts. It implements dynamic data loading: it initially loads the most recent data, and as the user scrolls back in time, it automatically fetches older data from the backend in 1-day chunks.
+    *   **Framework:** SvelteKit.
+    *   **Location:** `viewer/frontend`.
+    *   **Routes:**
+        *   `/`: Standard Viewer (Lightweight Charts).
+        *   `/zoom`: Infinite Zoom Viewer (Custom Canvas Engine).
+    *   **Components:**
+        *   `src/lib/zoom/`: Contains `CanvasChart.svelte` and `ChartEngine.ts` for the infinite zoom logic.
+    *   **Navigation**: Views are linked in the header; the selected ticker is passed via `?ticker=` URL parameter for a seamless transition.
+
+## Technical Lessons & Constraints
+
+*   **Smart Border Fetching (Failed Experiment)**: 
+    *   Attempted to fetch "anchor" points outside the viewport to close gaps (weekends). 
+    *   **Failure Cause**: Fragility in `pandas` vs `pyarrow` indexing and `KeyError` during metadata extraction for certain years. 
+    *   **Current Solution**: Reverted to a simple **50% date range buffer**. It's stable but may show gaps on weekends. **Do not attempt to re-implement without a strictly typed data model.**
+*   **Python Execution Environment**: 
+    *   Backend must be run with `PYTHONPATH=$(pwd)/viewer/backend` and `--app-dir viewer.backend` from the project root.
+    *   Failing to do so leads to `ModuleNotFoundError` for `main_service`.
+*   **Port Conflicts**: 
+    *   Vite (Frontend) defaults to 5173, but it can shift to 5174 if port is occupied by "zombie" processes. 
+    *   Use `fuser -k PORT/tcp` to clean up before restarting.
